@@ -1,41 +1,43 @@
-= Avito scanner, written in Rust
+# Avito scanner (Rust and NodeJS::Puppeeteer)
 
-== File structure
+<!-- vim-markdown-toc Redcarpet -->
 
-- README.md - this is it
-- .gitignore - see https://git-scm.com/docs/gitignore
-- .gitlab-ci.yml - required for proper work of `docker/refresh.sh`
-- `docker-compose.yml` - required for `docker-compose up -d`
-- `.env` - required for `docker-compose up -d`
-- docker/refresh.sh - tool for rebuilding docker container from docker/\*, in particular `avito-proj` 
-- docker/proj/Dockerfile - Dockerfile for service `proj`, mentioned in `docker-compose.yml`
-- docker/proj/sh/ - folder for helper sh-scripts used in `avito-proj` docker container
+* [Development](#development)
+    * [Prerequisites](#prerequisites)
+    * [Prepare workplace](#prepare-workplace)
+        * [Available commands](#available-commands)
+            * [cargo](#cargo)
+    * [Do not forget to stop docker containers after work is over](#do-not-forget-to-stop-docker-containers-after-work-is-over)
+* [Files](#files)
+* [Fairplay](#fairplay)
 
-== Development
+<!-- vim-markdown-toc -->
 
-=== Prerequisites
+## Development
+
+### Prerequisites
 
 - git
 - docker 
 - docker-compose
 
-=== Prepare workplace
+### Prepare workplace
 
 - clone repo: 
 
 ```
-git clone 
+git clone git@github.com:yurybikuzin/avito_scanner.git
 ```
 
 - up dev container: 
 
 ```
-docker-compose up -d && docker logs avito-proj -f
+docker-compose up -d 
 ```
 
-==== Available commands
+#### Available commands
 
-===== cargo
+##### cargo
 
 ```
 docker exec -it avito-proj cargo
@@ -43,11 +45,30 @@ docker exec -it -e RUST_LOG=info avito-proj cargo test -p diaps
 docker exec -it avito-proj cargo run
 ```
 
-=== Don't forget stop docker containers after work is over
+### Do not forget to stop docker containers after work is over
 
 ```
 docker-compose down
 ```
+
+## Files
+
+- `README.md` - this is it
+- `.gitignore` - see https://git-scm.com/docs/gitignore
+- `.gitlab-ci.yml` - required for proper work of `docker/refresh.sh`
+- `docker-compose.yml` - required for `docker-compose up -d`
+- `.env` - required for `docker-compose up -d`
+- `docker/refresh.sh` - tool for rebuilding docker container for service from `docker-compose.yml` (`proj` by default)
+- `docker/proj/Dockerfile` - Dockerfile for service `proj`, mentioned in `docker-compose.yml`
+- `docker/proj/sh/*` - helper sh-scripts used in `avito-proj` docker container
+- `docker/auth/Dockerfile/` - Dockerfile for service `auth`, mentioned in `docker-compose.yml`
+- `docker/auth/sh/*` - helper sh-scripts used in `avito-auth` docker container
+- `docker/auth/src/*` - neccessary files for building docker container of service `auth`
+- `Cargo.toml`, `Cargo.lock` - [cargo](https://doc.rust-lang.org/cargo/) files
+- `diaps/*`, `ids/*`, `cards/*`, `scanner/*` - scanner source files, written in [Rust](https://www.rust-lang.org/)
+- `out/*` - scanner output files
+
+## Fairplay
 
 https://vimeo.com/user58195081/review/394860047/b827eafd0d
 23:43-24:18

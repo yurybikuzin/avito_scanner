@@ -22,6 +22,7 @@ RUN mkdir /proj
 WORKDIR /proj
 
 COPY ./src/package.json .
+COPY ./src/license.md .
 COPY ./src/yarn.lock .
 COPY ./src/server.js .
 
