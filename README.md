@@ -4,6 +4,9 @@
 
 * [Development](#development)
     * [Prerequisites](#prerequisites)
+        * [Git](#git)
+        * [Docker](#docker)
+        * [Docker-Compose](#docker-compose)
     * [Prepare workplace](#prepare-workplace)
         * [Available commands](#available-commands)
             * [cargo](#cargo)
@@ -17,9 +20,19 @@
 
 ### Prerequisites
 
-- git
-- docker 
-- docker-compose
+#### Git
+
+https://git-scm.com/downloads
+
+#### Docker
+
+https://docs.docker.com/install
+
+Pay attention to [Post-installation steps for Linux](https://docs.docker.com/engine/install/linux-postinstall/)
+
+#### Docker-Compose
+
+https://docs.docker.com/compose/install
 
 ### Prepare workplace
 
