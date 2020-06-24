@@ -1,0 +1,6 @@
+test:
+  stage: test
+  # following lines is required for proper work of docker/refresh.sh
+  image: bazawinner/dev-avito-proj:0
+  image: bazawinner/dev-avito-auth:0
+

@@ -1,0 +1,26 @@
+[package]
+name = "diaps"
+version = "0.1.0"
+authors = ["Yury Bikuzin <yury.bikuzin@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "0.4"
+# chrono = "0.4"
+# humantime = "2.0"
+# serde = { version = "1.0", features = ["derive"] }
+# ansi_term = "0.6"
+# toml = "0.5"
+# async-std = "1.5"
+anyhow = "1.0"
+thiserror = "1.0"
+serde_json = "1.0.55"
+reqwest = { version = "0.10.6", features = ["json"] }
+url = "2.1.1"
+env_logger = "0.7.1"
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
+http = "0.2.1"
