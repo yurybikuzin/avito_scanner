@@ -34,21 +34,25 @@ async function getKey() {
             "--ignore-certificate-errors"
         ]
     });
-    const page = await browser.newPage();
-    await page.emulate(devices.devicesMap['iPhone X']);
-    await page.setRequestInterception(true);
-    let result = null;
-    page.on('request', request => {
-      const url = request.url();
-      if (request.resourceType() === 'image' || reSkip.test(url)) {
-          request.abort();
-      } else {
-          if (reMatch.test(url)) {
-              result = url.match(reMatch)[1];
+    try {
+        const page = await browser.newPage();
+        await page.emulate(devices.devicesMap['iPhone X']);
+        await page.setRequestInterception(true);
+        let result = null;
+        page.on('request', request => {
+          const url = request.url();
+          if (request.resourceType() === 'image' || reSkip.test(url)) {
+              request.abort();
+          } else {
+              if (reMatch.test(url)) {
+                  result = url.match(reMatch)[1];
+              }
+              request.continue();
           }
-          request.continue();
-      }
-    });
-    await page.goto('https://m.avito.ru/moskva/avtomobili?s=104&user=1', {waitUntil: 'networkidle2'});
+        });
+        await page.goto('https://m.avito.ru/moskva/avtomobili?s=104&user=1', {waitUntil: 'networkidle2'});
+    } finally {
+        await browser.close();
+    }
     return result
 }

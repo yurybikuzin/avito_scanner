@@ -1,0 +1,47 @@
+{
+  "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private:4900:20000:1000000": {
+    "timestamp": "some2020-06-25T21:20:53Z",
+    "ret": {
+      "last_stamp": 0,
+      "diaps": [
+        {
+          "price_min": null,
+          "price_max": 234376,
+          "count": 4761,
+          "checks": 7
+        },
+        {
+          "price_min": 234377,
+          "price_max": 379514,
+          "count": 4864,
+          "checks": 9
+        },
+        {
+          "price_min": 520616,
+          "price_max": 739205,
+          "count": 4708,
+          "checks": 8
+        },
+        {
+          "price_min": 739206,
+          "price_max": 1200685,
+          "count": 4829,
+          "checks": 12
+        },
+        {
+          "price_min": 1200685,
+          "price_max": 2200686,
+          "count": 3355,
+          "checks": 2
+        },
+        {
+          "price_min": 2200687,
+          "price_max": null,
+          "count": 1735,
+          "checks": 1
+        }
+      ],
+      "checks_total": 48
+    }
+  }
+}
