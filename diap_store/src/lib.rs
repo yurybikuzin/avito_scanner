@@ -32,13 +32,29 @@ impl DiapStore {
         let ret = serde_json::from_str(content)?;
         Ok(ret)
     }
-    pub fn add_diaps(&mut self, arg: &diaps::GetArg, ret: diaps::GetRet) {
+    pub fn set_diaps(&mut self, arg: &diaps::GetArg, ret: diaps::GetRet) {
         let key = format!("{}", arg);
         let val = DiapStoreItem {
             timestamp: chrono::Utc::now(),
             ret,
         };
         self.0.insert(key, val);
+    }
+    pub fn get_diaps(&self, arg: &diaps::GetArg, fresh_duration: chrono::Duration) -> Option<&DiapStoreItem> {
+        let key = format!("{}", arg);
+        match self.0.get(&key) {
+            None => None,
+            Some(item) => 
+                if let Some(fresh_limit) = item.timestamp.checked_add_signed(fresh_duration) {
+                    if chrono::Utc::now() > fresh_limit {
+                        None
+                    } else {
+                        Some(item)
+                    }
+                } else {
+                    None
+                }
+        }
     }
 }
 
@@ -55,8 +71,8 @@ impl FromStr for DiapStore {
 }
 
 pub struct DiapStoreItem {
-    timestamp: chrono::DateTime<chrono::Utc>,
-    ret: diaps::GetRet,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub ret: diaps::GetRet,
 }
 
 use serde::ser::{Serializer, SerializeStruct};
@@ -160,9 +176,6 @@ impl<'de> Deserialize<'de> for DiapStoreItem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use std::time::Instant;
-
-
     /// Setup function that is only run once, even if called multiple times.
     fn init() {
         INIT.call_once(|| env_logger::init());
@@ -195,7 +208,7 @@ mod tests {
             last_stamp: 0,
         };
         let mut diap_store = DiapStore::new();
-        diap_store.add_diaps(&get_arg, get_ret);
+        diap_store.set_diaps(&get_arg, get_ret);
 
         let json = serde_json::to_string_pretty(&diap_store)?;
         let diap_restore = DiapStore::from_str(&json)?;

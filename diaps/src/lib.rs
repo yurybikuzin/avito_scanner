@@ -97,8 +97,8 @@ pub struct Diap {
 ///
 /// Возвращает ошибки, если возникли проблемы при соединении с сервером, преобразовании ответа в
 /// json, извлечении значений result.count и result.lastStamp
-pub async fn get<'a>(key: &'a str, arg: GetArg<'a>) -> Result<GetRet> {
-    let GetArg {params, count_limit, price_precision, price_max_inc} = arg;
+pub async fn get<'a>(key: &'a str, arg: &GetArg<'a>) -> Result<GetRet> {
+    let GetArg {params, count_limit, price_precision, price_max_inc} = *arg;
 
     let mut price_min: Option<isize> = None;
     let mut price_max: Option<isize> = None;

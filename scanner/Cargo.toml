@@ -17,5 +17,6 @@ env_logger = "0.7.1"
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
 http = "0.2.1"
 diaps = { path = "../diaps", features = ["serde"] }
+diap_store = { path = "../diap_store" }
 log = "0.4"
 chrono = "0.4.11"
