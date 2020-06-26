@@ -175,15 +175,15 @@ impl<'de> Deserialize<'de> for DiapStoreItem {
 
 #[cfg(test)]
 mod tests {
+
+    #[allow(unused_imports)]
+    use log::{error, warn, info, debug, trace};
     use super::*;
-    /// Setup function that is only run once, even if called multiple times.
+    use std::sync::Once;
+    static INIT: Once = Once::new();
     fn init() {
         INIT.call_once(|| env_logger::init());
     }
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    #[allow(unused_imports)]
-    use log::{error, warn, info, debug, trace};
 
     #[tokio::test]
     async fn to_file() -> Result<()> {
