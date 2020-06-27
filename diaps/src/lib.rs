@@ -1,11 +1,13 @@
 
-use log::{info};
+#[allow(unused_imports)]
+use log::{error, warn, info, debug, trace};
+use std::time::Instant;
+
 use anyhow::{bail, Result, anyhow};
 use serde_json::Value;
 use url::Url;
-use std::env;
 use std::fmt;
-#[cfg(feature = "serde")]
+
 #[macro_use]
 extern crate serde;
 
@@ -13,7 +15,7 @@ extern crate serde;
 // ============================================================================
 
 /// Аргумент для fn get
-pub struct GetArg<'a> {
+pub struct Arg<'a> {
     /// params - непустая строка параметров, например: "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private"
     pub params: &'a str, 
 
@@ -29,7 +31,7 @@ pub struct GetArg<'a> {
 
 // ============================================================================
 
-impl fmt::Display for GetArg<'_> {
+impl fmt::Display for Arg<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}:{}:{}", self.params, self.count_limit, self.price_precision, self.price_max_inc)
     }
@@ -39,8 +41,8 @@ impl fmt::Display for GetArg<'_> {
 // ============================================================================
 
 /// Значение, возвращаемое fn get
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct GetRet {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Ret {
     /// lastStamp
     pub last_stamp: u64,
 
@@ -56,7 +58,7 @@ pub struct GetRet {
 
 /// Диапазон цены, содержащий близкое к get::PARAMS::count_limit число объявлений, но не больше
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Diap {
     /// Нижняя граница диапазона
     pub price_min: Option<isize>,
@@ -85,20 +87,22 @@ pub struct Diap {
 ///
 /// # Params:
 ///
-/// - key - непустой ключ авторизации (получаем у сервиса auth)
-/// - arg - другие аргументы, согласно GetArg
+/// - auth - непустой ключ авторизации (получаем у сервиса auth)
+/// - arg - другие аргументы, согласно Arg
 ///
 ///
 /// # Return:
 ///
-/// Возвращает GetRet
+/// Возвращает Ret
 ///
 /// # Errors
 ///
 /// Возвращает ошибки, если возникли проблемы при соединении с сервером, преобразовании ответа в
 /// json, извлечении значений result.count и result.lastStamp
-pub async fn get<'a>(key: &'a str, arg: &GetArg<'a>) -> Result<GetRet> {
-    let GetArg {params, count_limit, price_precision, price_max_inc} = *arg;
+pub async fn get<'a>(auth: &'a str, arg: &Arg<'a>) -> Result<Ret> {
+    let Arg {params, count_limit, price_precision, price_max_inc} = *arg;
+
+    let now = Instant::now();
 
     let mut price_min: Option<isize> = None;
     let mut price_max: Option<isize> = None;
@@ -113,8 +117,8 @@ pub async fn get<'a>(key: &'a str, arg: &GetArg<'a>) -> Result<GetRet> {
         while need_continue(count, price_max_delta, count_limit, price_precision) {
             let url = Url::parse(&format!(
                 "https://avito.ru/api/9/items?key={}&{}&display=list&page=1&limit=1{}{}{}",
-                key,
-                params,
+                auth,
+                params,         
                 match price_min { None => "".to_owned(), Some(price_min) => format!("&priceMin={}", price_min) },
                 match price_max { None => "".to_owned(), Some(price_max) => format!("&priceMax={}", price_max) },
                 match last_stamp { None => "".to_owned(), Some(last_stamp) => format!("&lastStamp={}", last_stamp) },
@@ -143,7 +147,7 @@ pub async fn get<'a>(key: &'a str, arg: &GetArg<'a>) -> Result<GetRet> {
             };
             count = Some(count_src);
 
-            info!("count: {:?}", count);
+            trace!("count: {:?}", count);
             if let Some(count) = count {
 
                 let (price_max_new, price_max_delta_new) = 
@@ -186,13 +190,13 @@ pub async fn get<'a>(key: &'a str, arg: &GetArg<'a>) -> Result<GetRet> {
                 ;
                 price_max = price_max_new;
                 price_max_delta = price_max_delta_new;
-                info!("price_min: {:?}, price_max: {:?}, price_max_delta: {:?}", price_min, price_max, price_max_delta);
+                trace!("price_min: {:?}, price_max: {:?}, price_max_delta: {:?}", price_min, price_max, price_max_delta);
             } else {
                 unreachable!();
             }
         }
         let diap = Diap {price_min, price_max, count: count.unwrap(), checks};
-        info!(">>> diap: {:?}", diap);
+        trace!(">>> diap: {:?}", diap);
         diaps.push(diap);
         price_min = Some(
             match price_max {
@@ -204,32 +208,18 @@ pub async fn get<'a>(key: &'a str, arg: &GetArg<'a>) -> Result<GetRet> {
         price_max_delta = None;
         count = None;
     }
-    info!("checks_total: {:?}", checks_total);
-    Ok(GetRet {
+
+    info!("{} ms, diaps::get: checks_total: {}, diaps.len: {}", 
+        Instant::now().duration_since(now).as_millis(),
+        checks_total, 
+        diaps.len(),
+    );
+
+    Ok(Ret {
         last_stamp: last_stamp.unwrap(),
         diaps,
         checks_total,
     })
-}
-
-// ============================================================================
-// ============================================================================
-
-/// Возвращает значение переменной среды env_var_name
-/// Если переменная среды не определена, возвращает значение по умолчанию default
-///
-/// #Errors
-///
-/// Если значение переменноё среды определено, но не удалось преобразовать в тип T, возвращает
-/// ошибку
-pub fn param<T: std::str::FromStr>(env_var_name: &str, default: T) -> Result<T> {
-    env::var(env_var_name)
-    .map_or_else(
-        |_err| Ok(default), 
-        |val| val.parse::<T>().map_err(
-            |_err| anyhow!("failed to parse {}='{}'", env_var_name, val)
-        ),
-    )
 }
 
 // ============================================================================
@@ -268,61 +258,41 @@ fn need_continue(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use env_logger;
-    use http::StatusCode;
-    use std::time::Instant;
 
+    #[allow(unused_imports)]
+    use log::{error, warn, info, debug, trace};
+    use super::*;
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    fn init() {
+        INIT.call_once(|| env_logger::init());
+    }
+
+    use env;
     const COUNT_LIMIT: u64 = 4900;
     const PRICE_PRECISION: isize = 20000;
     const PRICE_MAX_INC: isize = 1000000;
 
     #[tokio::test]
     async fn it_works() -> Result<()> {
-        env_logger::init();
+        init();
 
-        let count_limit: u64 = param("AVITO_COUNT_LIMIT", COUNT_LIMIT)?;
-        let price_precision: isize = param("AVITO_PRICE_PRECISION", PRICE_PRECISION)?;
-        let price_max_inc: isize = param("AVITO_PRICE_MAX_INC", PRICE_MAX_INC)?;
+        let count_limit: u64 = env::get("AVITO_COUNT_LIMIT", COUNT_LIMIT)?;
+        let price_precision: isize = env::get("AVITO_PRICE_PRECISION", PRICE_PRECISION)?;
+        let price_max_inc: isize = env::get("AVITO_PRICE_MAX_INC", PRICE_MAX_INC)?;
 
-        let now = Instant::now();
-        let response = reqwest::get("http://auth:3000").await?;
-        let key = match response.status() {
-            StatusCode::OK => {
-                response.text().await?
-            },
-            StatusCode::NOT_FOUND => {
-                bail!("auth: NOT_FOUND: {}", response.text().await?);
-            },
-            StatusCode::INTERNAL_SERVER_ERROR => {
-                bail!("auth: INTERNAL_SERVER_ERROR: {}", response.text().await?);
-            },
-            _ => {
-                unreachable!();
-            },
-        };
-        info!("({} ms) key!: {}", 
-            Instant::now().duration_since(now).as_millis(), 
-            key,
-        );
-
-        let now = Instant::now();
         let params = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
-
-        let GetRet {last_stamp, diaps, checks_total} = get( &key, GetArg { 
+        let arg = Arg { 
             params, 
             count_limit, 
             price_precision, 
             price_max_inc,
-        }).await?;
+        };
 
-        info!("({} ms) last_stamp: {}, diaps: {:?}, len: {:?}, total_checks: {:?}", 
-            Instant::now().duration_since(now).as_millis(),
-            last_stamp, 
-            diaps, 
-            diaps.len(), 
-            checks_total,
-        );
+        let auth = auth::get().await?;
+        let ret = get(&auth, &arg).await?;
+
+        info!("ret:{}", serde_json::to_string_pretty(&ret).unwrap());
 
         Ok(())
     }

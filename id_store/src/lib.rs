@@ -23,9 +23,9 @@ use tokio::prelude::*;
 // ============================================================================
 
 #[derive(Serialize, Deserialize)]
-pub struct DiapStore (HashMap<String, DiapStoreItem>);
+pub struct IdStore (HashMap<String, IdStoreItem>);
 
-impl DiapStore {
+impl IdStore {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
@@ -46,17 +46,17 @@ impl DiapStore {
         let ret = Self::from_str(content)?;
         Ok(ret)
     }
-    pub fn set_diaps(&mut self, arg: &diaps::Arg, ret: diaps::Ret) {
-        let key = format!("{}", arg);
-        let val = DiapStoreItem {
+    pub fn set_ids(&mut self, key: &str, ret: ids::Ret) {
+        // let key = format!("{}", params);
+        let val = IdStoreItem {
             timestamp: chrono::Utc::now(),
             ret,
         };
-        self.0.insert(key, val);
+        self.0.insert(key.to_owned(), val);
     }
-    pub fn get_diaps(&self, arg: &diaps::Arg, fresh_duration: chrono::Duration) -> Option<&DiapStoreItem> {
-        let key = format!("{}", arg);
-        match self.0.get(&key) {
+    pub fn get_ids(&self, key: &str, fresh_duration: chrono::Duration) -> Option<&IdStoreItem> {
+        // let key = format!("{}", arg);
+        match self.0.get(key) {
             None => None,
             Some(item) => 
                 if let Some(fresh_limit) = item.timestamp.checked_add_signed(fresh_duration) {
@@ -72,7 +72,7 @@ impl DiapStore {
     }
 }
 
-impl FromStr for DiapStore {
+impl FromStr for IdStore {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -83,26 +83,28 @@ impl FromStr for DiapStore {
 
 // ============================================================================
 
-pub struct DiapStoreItem {
+pub struct IdStoreItem {
     pub timestamp: chrono::DateTime<chrono::Utc>,
-    pub ret: diaps::Ret,
+    pub ret: ids::Ret,
 }
 
-impl Serialize for DiapStoreItem {
+impl Serialize for IdStoreItem {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         // 2 is the number of fields in the struct.
-        let mut state = serializer.serialize_struct("DiapStoreItem", 2)?;
+        let mut state = serializer.serialize_struct("IdStoreItem", 2)?;
         let timestamp = self.timestamp.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         state.serialize_field("timestamp", &timestamp)?;
-        state.serialize_field("ret", &self.ret)?;
+        let mut sorted = self.ret.iter().collect::<Vec<&u64>>();
+        sorted.sort_unstable();
+        state.serialize_field("ret", &sorted)?;
         state.end()
     }
 }
 
-impl<'de> Deserialize<'de> for DiapStoreItem {
+impl<'de> Deserialize<'de> for IdStoreItem {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -111,16 +113,16 @@ impl<'de> Deserialize<'de> for DiapStoreItem {
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field { Timestamp, Ret }
 
-        struct DiapStoreItemVisitor;
+        struct IdStoreItemVisitor;
 
-        impl<'de> Visitor<'de> for DiapStoreItemVisitor {
-            type Value = DiapStoreItem;
+        impl<'de> Visitor<'de> for IdStoreItemVisitor {
+            type Value = IdStoreItem;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct DiapStoreItem")
+                formatter.write_str("struct IdStoreItem")
             }
 
-            fn visit_seq<V>(self, mut seq: V) -> Result<DiapStoreItem, V::Error>
+            fn visit_seq<V>(self, mut seq: V) -> Result<IdStoreItem, V::Error>
             where
                 V: SeqAccess<'de>,
             {
@@ -135,10 +137,10 @@ impl<'de> Deserialize<'de> for DiapStoreItem {
 
                 let ret = seq.next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                Ok(DiapStoreItem{timestamp, ret})
+                Ok(IdStoreItem{timestamp, ret})
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<DiapStoreItem, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<IdStoreItem, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -168,12 +170,12 @@ impl<'de> Deserialize<'de> for DiapStoreItem {
                 }
                 let timestamp = timestamp.ok_or_else(|| de::Error::missing_field("timestamp"))?;
                 let ret = ret.ok_or_else(|| de::Error::missing_field("ret"))?;
-                Ok(DiapStoreItem{timestamp, ret})
+                Ok(IdStoreItem{timestamp, ret})
             }
         }
 
         const FIELDS: &'static [&'static str] = &["timestamp", "ret"];
-        deserializer.deserialize_struct("DiapStoreItem", FIELDS, DiapStoreItemVisitor)
+        deserializer.deserialize_struct("IdStoreItem", FIELDS, IdStoreItemVisitor)
     }
 }
 
@@ -193,35 +195,28 @@ mod tests {
         INIT.call_once(|| env_logger::init());
     }
 
+    use std::collections::HashSet;
+
     #[tokio::test]
     async fn to_file() -> Result<()> {
         init();
 
-        let arg = diaps::Arg {
-            params: "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private",
-            count_limit: 4900,
-            price_precision: 20000,
-            price_max_inc: 1000000,
-        };
-        let mut diaps: Vec<diaps::Diap> = Vec::new();
-        diaps.push(diaps::Diap { price_min: None, price_max: Some(234376), count: 4761, checks: 7});
-        diaps.push(diaps::Diap { price_min: Some(234377), price_max: Some(379514), count: 4864, checks: 9});
-        diaps.push(diaps::Diap { price_min: Some(520616), price_max: Some(739205), count: 4708, checks: 8 });
-        diaps.push(diaps::Diap { price_min: Some(739206), price_max: Some(1200685), count: 4829, checks: 12 });
-        diaps.push(diaps::Diap { price_min: Some(1200685), price_max: Some(2200686), count: 3355, checks: 2 });
-        diaps.push(diaps::Diap { price_min: Some(2200687), price_max: None, count: 1735, checks: 1 });
-        let ret = diaps::Ret {
-            diaps,
-            checks_total: 48,
-            last_stamp: 0,
-        };
-        let mut diap_store = DiapStore::new();
-        diap_store.set_diaps(&arg, ret);
+        let key = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
+        let mut ids: ids::Ret = HashSet::new();
+        ids.insert(1);
+        ids.insert(2);
+        ids.insert(3);
+        ids.insert(5);
+        ids.insert(8);
+        ids.insert(13);
+
+        let mut diap_store = IdStore::new();
+        diap_store.set_ids(key, ids);
 
         let json = serde_json::to_string_pretty(&diap_store)?;
-        let file_path = Path::new("out_test/diaps.json");
+        let file_path = Path::new("out_test/ids.json");
         diap_store.to_file(&file_path).await?;
-        let diap_restore = DiapStore::from_file(&file_path).await?;
+        let diap_restore = IdStore::from_file(&file_path).await?;
         let json_restore = serde_json::to_string_pretty(&diap_restore)?;
         pretty_assertions::assert_eq!(json_restore, json);
 
@@ -232,11 +227,11 @@ mod tests {
     async fn from_file() -> Result<()> {
         init();
 
-        let err = DiapStore::from_file(Path::new("out_test/diaps_corrupted.json")).await;
+        let err = IdStore::from_file(Path::new("out_test/ids_corrupted.json")).await;
         assert!(err.is_err());
         let err = err.err().unwrap();
         assert_eq!(
-            "invalid value: string \"some2020-06-25T21:20:53Z\", expected rfc_3339 timestamp at line 3 column 43", 
+            "invalid value: string \"some2020-06-27T16:14:50Z\", expected rfc_3339 timestamp at line 3 column 43", 
             &format!("{}", err),
         );
 

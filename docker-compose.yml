@@ -30,5 +30,7 @@ services:
             - BW_AUTH_PORT
         volumes:
             - ./docker/auth/sh:/sh
+            - ./docker/auth/src:/proj/src
+            - ./docker/auth/out:/proj/out
         ports:
             - $BW_AUTH_PORT:3000

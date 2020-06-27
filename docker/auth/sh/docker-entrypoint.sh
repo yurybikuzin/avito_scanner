@@ -8,4 +8,4 @@ cat <<USAGE
     curl localhost:$BW_AUTH_PORT -i
 USAGE
 
-exec dumb-init -- node server.js
+exec dumb-init -- nodemon -- src/server.js

@@ -1,2 +1,2 @@
 [workspace]
-members = [ "auth", "diaps", "diap_store", "ids", "cards", "scanner" ]
+members = [ "env", "arrange_millis", "auth", "diaps", "diap_store", "ids", "id_store", "cards", "scanner" ]

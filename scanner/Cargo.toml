@@ -7,16 +7,18 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+log = "0.4"
 anyhow = "1.0"
-thiserror = "1.0"
-serde_json = "1.0.55"
-serde = { version = "1.0", features = ["derive"] }
-reqwest = { version = "0.10.6", features = ["json"] }
-url = "2.1.1"
+
 env_logger = "0.7.1"
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
-http = "0.2.1"
-diaps = { path = "../diaps", features = ["serde"] }
-diap_store = { path = "../diap_store" }
-log = "0.4"
 chrono = "0.4.11"
+ansi-escapes = "0.1"
+
+env = { path = "../env" }
+auth = { path = "../auth" }
+diaps = { path = "../diaps" }
+diap_store = { path = "../diap_store" }
+ids = { path = "../ids" }
+id_store = { path = "../id_store" }
+arrange_millis = { path = "../arrange_millis" }

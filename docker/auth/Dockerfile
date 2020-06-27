@@ -17,14 +17,13 @@ RUN true && \
     # <<< dumb-init ===
 true
 
+
+RUN yarn global add nodemon
+
 RUN mkdir /proj
-
 WORKDIR /proj
-
-COPY ./src/package.json .
-COPY ./src/license.md .
-COPY ./src/yarn.lock .
-COPY ./src/server.js .
-
-RUN yarn
+COPY ./copy/package.json .
+COPY ./copy/license.md .
+COPY ./copy/yarn.lock .
+RUN yarn 
 

@@ -1,0 +1,13 @@
+{
+  "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private": {
+    "timestamp": "some2020-06-27T16:14:50Z",
+    "ret": [
+      1,
+      2,
+      3,
+      5,
+      8,
+      13
+    ]
+  }
+}

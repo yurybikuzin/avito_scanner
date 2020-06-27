@@ -26,6 +26,7 @@ const reSkip = /(?:(?:securepubads|stats)\.g\.doubleclick\.net|sslwidget\.criteo
 const reMatch = /api\/1\/rmp\/search\?key=([^&]+)/;
 
 async function getKey() {
+    console.log('getKey');
     const browser = await puppeteer.launch({
         executablePath: '/usr/bin/google-chrome',
         args: [
@@ -46,11 +47,15 @@ async function getKey() {
           } else {
               if (reMatch.test(url)) {
                   result = url.match(reMatch)[1];
+              } else {
+                  console.log(url);
               }
               request.continue();
           }
         });
         await page.goto('https://m.avito.ru/moskva/avtomobili?s=104&user=1', {waitUntil: 'networkidle2'});
+        await page.screenshot({ path: 'out/page.png' });
+        console.log('screenshot is written to docker/auth/out/page.png');
     } finally {
         await browser.close();
     }
