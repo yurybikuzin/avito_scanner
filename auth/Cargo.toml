@@ -11,6 +11,7 @@ anyhow = "1.0"
 log = "0.4"
 reqwest = { version = "0.10.6" }
 http = "0.2.1"
+arrange_millis = { path = "../arrange_millis" }
 
 [dev-dependencies]
 env_logger = "0.7.1"

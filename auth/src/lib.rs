@@ -14,7 +14,8 @@ const AUTH: &str = "AVITO_AUTH";
 
 pub async fn get() -> Result<String> {
     match std::env::var(AUTH) {
-        Ok(auth) => {             info!("from {}, auth::get: {}", 
+        Ok(auth) => {             
+            info!("from {}, auth::get: {}", 
                 AUTH, 
                 auth,
             );
@@ -37,8 +38,8 @@ pub async fn get() -> Result<String> {
                     unreachable!();
                 },
             };
-            info!("{} ms, auth::get: {}", 
-                Instant::now().duration_since(now).as_millis(), 
+            info!("{}, auth::get: {}", 
+                arrange_millis::get(Instant::now().duration_since(now).as_millis()), 
                 auth,
             );
             Ok(auth) // af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir
@@ -63,7 +64,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn to_file() -> Result<()> {
+    async fn it_works() -> Result<()> {
         init();
 
         let _ = get().await?;

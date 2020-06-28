@@ -7,6 +7,7 @@ use env_logger;
 use diap_store::{DiapStore};
 use id_store::{IdStore};
 use std::path::Path;
+use std::time::Instant;
 
 // ============================================================================
 // ============================================================================
@@ -24,9 +25,35 @@ const THREAD_LIMIT: usize = 1;
 const ITEMS_PER_PAGE: usize = 50;
 const RETRY_COUNT: usize = 3;
 
+const CARD_OUT_DIR_SPEC: &str = "out";
+// use url::Url;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+
+    // // let re = regex::Regex::new(r"My Public IPv4 is: <[^>]+>([^<]+)").unwrap();
+    // let re = regex::Regex::new(r#""ipv4":\{"value":"([^"]+)"#).unwrap();
+    //
+    // let url = format!("https://yandex.ru/internet/");
+    // let url = Url::parse(&url)?;
+    // // let client = reqwest::Client::new();
+    // //
+    // // let proxy_http_url = env::get("PROXY_HTTP_URL")?;
+    // // let proxy_https_url = env::get("PROXY_HTTPS_URL")?;
+    // let client = reqwest::Client::builder()
+    //     // .proxy(reqwest::Proxy::http("http://91.235.33.79")?)
+    //     .proxy(reqwest::Proxy::all("https://91.235.33.91")?)
+    //     // .proxy(reqwest::Proxy::https("https://169.57.1.85")?)
+    //     .build()?
+    // ;
+    // let text = client.get(url).send().await?.text().await?;
+    // match re.captures(&text) {
+    //     None => info!("ip not found"),
+    //     Some(cap) => info!("ip: {}", &cap[1]),
+    // }
+
+    
 
     let params = env::get("AVITO_PARAMS", PARAMS.to_owned())?;
     let id_store_file_spec= &Path::new(ID_STORE_FILE_SPEC);
@@ -39,8 +66,14 @@ async fn main() -> Result<()> {
         Err(_) => IdStore::new(),
     };
 
-    let ids_ret = match id_store.get_ids(&params, id_fresh_duration) {
-        Some(item) => &item.ret,
+    let thread_limit = env::get("AVITO_THREAD_LIMIT", THREAD_LIMIT)?;
+    let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
+
+    let ids = match id_store.get_ids(&params, id_fresh_duration) {
+        Some(item) => {
+            println!("{} ids loaded from {:?}", item.ret.len(), id_store_file_spec.to_string_lossy());
+            &item.ret
+        },
         None => {
 
             let count_limit: u64 = env::get("AVITO_COUNT_LIMIT", COUNT_LIMIT)?;
@@ -76,9 +109,7 @@ async fn main() -> Result<()> {
             };
             auth = Some(auth.unwrap_or(auth::get().await?));
 
-            let thread_limit = env::get("AVITO_THREAD_LIMIT", THREAD_LIMIT)?;
             let items_per_page = env::get("AVITO_ITEMS_PER_PAGE", ITEMS_PER_PAGE)?;
-            let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
 
             let ids_arg = ids::Arg {
                 auth: auth.as_ref().unwrap(),
@@ -89,6 +120,7 @@ async fn main() -> Result<()> {
                 retry_count,
             };
             println!("ids::get");
+            let now = Instant::now();
             let ids_ret = ids::get(ids_arg, &|arg: ids::CallbackArg| {
                 println!("{}ids::get: time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
                     ansi_escapes::EraseLines(2),
@@ -102,12 +134,27 @@ async fn main() -> Result<()> {
                     arg.ids_len,
                 );
             }).await?;
+            let ids_len = ids_ret.len();
+            println!("{} ids fetched, took {}", ids_len, arrange_millis::get(Instant::now().duration_since(now).as_millis()));
+            println!("{}", ansi_escapes::EraseLines(2));
 
             id_store.set_ids(&params, ids_ret);
             id_store.to_file(id_store_file_spec).await?;
+
+            println!("{} ids written to {:?}", ids_len, id_store_file_spec.to_string_lossy());
             &id_store.get_ids(&params, id_fresh_duration).unwrap().ret
         },
     };
+
+
+    let out_dir_spec = &Path::new(CARD_OUT_DIR_SPEC);
+    cards::fetch_and_save(cards::Arg {
+        auth: auth.as_ref().unwrap(),
+        ids, 
+        out_dir_spec,
+        thread_limit,
+        retry_count,
+    }).await?;
 
     Ok(())
 }

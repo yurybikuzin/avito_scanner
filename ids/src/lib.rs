@@ -7,7 +7,9 @@ use anyhow::{Result, Error, bail, anyhow};
 
 use std::time::Instant;
 use std::collections::HashSet;
+
 use url::Url;
+use serde_json::Value;
 
 use futures::{
     select,
@@ -16,14 +18,16 @@ use futures::{
         StreamExt,
     },
 };
-use serde_json::Value;
+
+// ============================================================================
+// ============================================================================
 
 pub struct Arg<'a> {
     pub auth: &'a str,
     pub params: &'a str,
     pub diaps_ret: &'a diaps::Ret, 
-    pub thread_limit: usize,
     pub items_per_page: usize,
+    pub thread_limit: usize,
     pub retry_count: usize,
 }
 
@@ -31,9 +35,9 @@ macro_rules! push_fut {
     ($fut_queue: expr, $client: expr, $arg: expr, $page: expr, $diap: expr) => {
         let fetch_arg = FetchArg {
             client: $client,
+            auth: $arg.auth.to_owned(),
             diap: $diap, 
             page: $page,
-            auth: $arg.auth.to_owned(),
             params: $arg.params.to_owned(),
             last_stamp: $arg.diaps_ret.last_stamp,
             items_per_page: $arg.items_per_page,
@@ -60,15 +64,15 @@ pub async fn get<'a>(
 ) -> Result<Ret> {
     let now = Instant::now();
 
-    let mut diaps_i = 0;
+    let mut diap_i = 0;
     let diaps_len = arg.diaps_ret.diaps.len();
 
     let mut fut_queue = FuturesUnordered::new();
-    while diaps_i < arg.thread_limit && diaps_i < diaps_len {
+    while diap_i < arg.thread_limit && diap_i < diaps_len {
         let client = reqwest::Client::new();
-        let diap = arg.diaps_ret.diaps[diaps_i].clone();
+        let diap = arg.diaps_ret.diaps[diap_i].clone();
         push_fut!(fut_queue, client, arg, 1, diap);
-        diaps_i += 1;
+        diap_i += 1;
     }
     let mut elapsed_qt: u64 = 0;
     let mut remained_qt = arg.diaps_ret.diaps.iter()
@@ -106,9 +110,9 @@ pub async fn get<'a>(
                         });
                         if ret.arg.page < ret.page_qt {
                             push_fut!(fut_queue, ret.arg.client, arg, ret.arg.page + 1, ret.arg.diap);
-                        } else if diaps_i < diaps_len {
-                            push_fut!(fut_queue, ret.arg.client, arg, 1, arg.diaps_ret.diaps[diaps_i].clone());
-                            diaps_i += 1;
+                        } else if diap_i < diaps_len {
+                            push_fut!(fut_queue, ret.arg.client, arg, 1, arg.diaps_ret.diaps[diap_i].clone());
+                            diap_i += 1;
                         }
                     },
                 }
@@ -126,13 +130,16 @@ pub async fn get<'a>(
     Ok(ids)
 }
 
+// ============================================================================
+// ============================================================================
+
 struct FetchArg {
     client: reqwest::Client,
+    auth: String,
 
     diap: diaps::Diap,
     page: usize,
 
-    auth: String,
     params: String,
     last_stamp: u64,
     items_per_page: usize,
@@ -226,9 +233,13 @@ async fn fetch(arg: FetchArg) -> Result<FetchRet>{
     })
 }
 
+// ============================================================================
+
 fn fill_ids(ids: Ret, items: &Vec<Value>, url: Url) -> Result<Ret> {
     fill_ids_helper(ids, items, url, &|| "result.items".to_owned())
 }
+
+// ============================================================================
 
 fn fill_ids_helper(
     mut ids: Ret, 
@@ -275,6 +286,10 @@ fn fill_ids_helper(
     }
     Ok(ids)
 }
+
+// ============================================================================
+// ============================================================================
+// ============================================================================
 
 #[cfg(test)]
 mod tests {

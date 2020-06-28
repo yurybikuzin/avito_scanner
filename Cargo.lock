@@ -56,6 +56,7 @@ name = "auth"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrange_millis",
  "auth",
  "env_logger",
  "http",
@@ -100,6 +101,21 @@ dependencies = [
 [[package]]
 name = "cards"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrange_millis",
+ "auth",
+ "env_logger",
+ "futures",
+ "ids",
+ "lazy_static",
+ "log",
+ "regex",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "url",
+]
 
 [[package]]
 name = "cc"
@@ -852,6 +868,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "proxy_checker"
+version = "0.1.0"
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -998,6 +1018,7 @@ dependencies = [
  "anyhow",
  "arrange_millis",
  "auth",
+ "cards",
  "chrono",
  "diap_store",
  "diaps",

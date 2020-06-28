@@ -1,12 +1,13 @@
 
 #[allow(unused_imports)]
 use log::{error, warn, info, debug, trace};
-use std::time::Instant;
+#[allow(unused_imports)]
+use anyhow::{Result, Error, bail, anyhow};
 
-use anyhow::{bail, Result, anyhow};
-use serde_json::Value;
-use url::Url;
 use std::fmt;
+use std::time::Instant;
+use url::Url;
+use serde_json::Value;
 
 #[macro_use]
 extern crate serde;
@@ -115,14 +116,15 @@ pub async fn get<'a>(auth: &'a str, arg: &Arg<'a>) -> Result<Ret> {
     loop {
         let mut checks: usize = 0;
         while need_continue(count, price_max_delta, count_limit, price_precision) {
-            let url = Url::parse(&format!(
+            let url = format!(
                 "https://avito.ru/api/9/items?key={}&{}&display=list&page=1&limit=1{}{}{}",
                 auth,
                 params,         
                 match price_min { None => "".to_owned(), Some(price_min) => format!("&priceMin={}", price_min) },
                 match price_max { None => "".to_owned(), Some(price_max) => format!("&priceMax={}", price_max) },
                 match last_stamp { None => "".to_owned(), Some(last_stamp) => format!("&lastStamp={}", last_stamp) },
-            ))?;
+            );
+            let url = Url::parse(&url)?;
             let text = client.get(url).send().await?.text().await?;
             checks += 1;
             checks_total += 1;
