@@ -102,11 +102,13 @@ dependencies = [
 name = "cards"
 version = "0.1.0"
 dependencies = [
+ "ansi-escapes",
  "anyhow",
  "arrange_millis",
  "auth",
  "env_logger",
  "futures",
+ "http",
  "ids",
  "lazy_static",
  "log",
@@ -537,6 +539,7 @@ dependencies = [
  "env",
  "env_logger",
  "futures",
+ "http",
  "log",
  "reqwest",
  "serde_json",

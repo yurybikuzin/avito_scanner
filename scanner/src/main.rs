@@ -21,12 +21,12 @@ const PRICE_MAX_INC: isize = 1000000;
 const ID_STORE_FILE_SPEC: &str = "out/ids.json";
 const ID_FRESH_DURATION: usize = 1440; //30; // minutes
 const PARAMS: &str = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
-const THREAD_LIMIT: usize = 1;
+const THREAD_LIMIT_NETWORK: usize = 1;
+const THREAD_LIMIT_FILE: usize = 12;
 const ITEMS_PER_PAGE: usize = 50;
 const RETRY_COUNT: usize = 3;
 
 const CARD_OUT_DIR_SPEC: &str = "out";
-// use url::Url;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -66,8 +66,11 @@ async fn main() -> Result<()> {
         Err(_) => IdStore::new(),
     };
 
-    let thread_limit = env::get("AVITO_THREAD_LIMIT", THREAD_LIMIT)?;
+    let thread_limit_network = env::get("AVITO_THREAD_LIMIT_NETWORK", THREAD_LIMIT_NETWORK)?;
+    let thread_limit_file = env::get("AVITO_THREAD_LIMIT_FILE", THREAD_LIMIT_FILE)?;
     let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
+
+    let mut auth: Option<String> = None;
 
     let ids = match id_store.get_ids(&params, id_fresh_duration) {
         Some(item) => {
@@ -96,18 +99,19 @@ async fn main() -> Result<()> {
                 Ok(diap_store) => diap_store, 
                 Err(_) => DiapStore::new(),
             };
-            let mut auth: Option<String> = None;
             let diaps_ret = match diap_store.get_diaps(&diaps_arg, diap_fresh_duration) {
                 Some(item) => &item.ret,
                 None => {
-                    auth = Some(auth.unwrap_or(auth::get().await?));
+                    // auth = Some(auth.unwrap_or(auth::get().await?));
+                    auth = get_auth().await?;
                     let diaps_ret = diaps::get(auth.as_ref().unwrap(), &diaps_arg).await?;
                     diap_store.set_diaps(&diaps_arg, diaps_ret);
                     diap_store.to_file(diap_store_file_spec).await?;
                     &diap_store.get_diaps(&diaps_arg, diap_fresh_duration).unwrap().ret
                 },
             };
-            auth = Some(auth.unwrap_or(auth::get().await?));
+            // auth = Some(auth.unwrap_or(auth::get().await?));
+            auth = get_auth().await?;
 
             let items_per_page = env::get("AVITO_ITEMS_PER_PAGE", ITEMS_PER_PAGE)?;
 
@@ -115,15 +119,16 @@ async fn main() -> Result<()> {
                 auth: auth.as_ref().unwrap(),
                 params: &params,
                 diaps_ret: &diaps_ret, 
-                thread_limit,
+                thread_limit_network,
                 items_per_page,
                 retry_count,
             };
+            let cmd = ansi_escapes::EraseLines(2);
             println!("ids::get");
             let now = Instant::now();
             let ids_ret = ids::get(ids_arg, &|arg: ids::CallbackArg| {
                 println!("{}ids::get: time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
-                    ansi_escapes::EraseLines(2),
+                    cmd,
                     arrange_millis::get(arg.elapsed_millis), 
                     arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
                     arrange_millis::get(arg.remained_millis), 
@@ -135,8 +140,7 @@ async fn main() -> Result<()> {
                 );
             }).await?;
             let ids_len = ids_ret.len();
-            println!("{} ids fetched, took {}", ids_len, arrange_millis::get(Instant::now().duration_since(now).as_millis()));
-            println!("{}", ansi_escapes::EraseLines(2));
+            println!("{}{} ids fetched, took {}", cmd, ids_len, arrange_millis::get(Instant::now().duration_since(now).as_millis()));
 
             id_store.set_ids(&params, ids_ret);
             id_store.to_file(id_store_file_spec).await?;
@@ -146,15 +150,70 @@ async fn main() -> Result<()> {
         },
     };
 
+    let out_dir = &Path::new(CARD_OUT_DIR_SPEC);
 
-    let out_dir_spec = &Path::new(CARD_OUT_DIR_SPEC);
-    cards::fetch_and_save(cards::Arg {
+    // let cmd = ansi_escapes::EraseLines(2);
+    // info!("thread_limit_file: {}", thread_limit_file);
+    // let now = Instant::now();
+    // println!("cards::non_existent_only");
+    // let ids = cards::non_existent_only(&ids, out_dir, thread_limit_file, None).await?;
+    // // println!("{}, cards::non_existent_only: {}", cmd, ids.len());
+    // println!("{}, cards::non_existent_only: {}", arrange_millis::get(Instant::now().duration_since(now).as_millis()), ids.len());
+
+    // let cmd = ansi_escapes::EraseLines(2);
+    // info!("thread_limit_file: {}", thread_limit_file);
+    // println!("cards::non_existent_only");
+    // let ids = cards::non_existent_only(&ids, out_dir, thread_limit_file, &|arg: cards::CallbackArg| {
+    //     println!("{}cards::non_existent_only: time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
+    //         cmd,
+    //         arrange_millis::get(arg.elapsed_millis), 
+    //         arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
+    //         arrange_millis::get(arg.remained_millis), 
+    //         arrange_millis::get(arg.per_millis), 
+    //         arg.elapsed_qt,
+    //         arg.elapsed_qt + arg.remained_qt,
+    //         arg.remained_qt,
+    //     );
+    // }).await?;
+    // println!("{}, cards::non_existent_only: {}", cmd, ids.len());
+
+    let cmd = ansi_escapes::CursorShow;
+    // auth = Some(auth.unwrap_or(auth::get().await?));
+    auth = get_auth().await?;
+    println!("cards::fetch_and_save");
+    cards::fetch_and_save(&cards::Arg {
         auth: auth.as_ref().unwrap(),
-        ids, 
-        out_dir_spec,
-        thread_limit,
+        ids: &ids, 
+        out_dir,
+        thread_limit_network,
+        thread_limit_file,
         retry_count,
-    }).await?;
+    }, Some(&|arg: cards::CallbackArg| {
+        println!("{}cards::fetch_and_save: time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
+            cmd,
+            arrange_millis::get(arg.elapsed_millis), 
+            arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
+            arrange_millis::get(arg.remained_millis), 
+            arrange_millis::get(arg.per_millis), 
+            arg.elapsed_qt,
+            arg.elapsed_qt + arg.remained_qt,
+            arg.remained_qt,
+        );
+    })).await?;
+    println!("{}", cmd);
 
     Ok(())
+}
+
+async fn get_auth(auth: Option<String>) -> Result<Option<String>> {
+    Ok(Some(match auth {
+        Some(auth) => auth,
+        None => {
+            println!("Получение токена авторизации . . .");
+            let start = Instant::now();
+            let auth = auth::get().await?
+            println!("Токен авторизации получен, {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()));
+            auth
+        },
+    }))
 }

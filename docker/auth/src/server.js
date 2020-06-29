@@ -27,6 +27,7 @@ const reMatch = /api\/1\/rmp\/search\?key=([^&]+)/;
 
 async function getKey() {
     console.log('getKey');
+    let result = null;
     const browser = await puppeteer.launch({
         executablePath: '/usr/bin/google-chrome',
         args: [
@@ -39,7 +40,6 @@ async function getKey() {
         const page = await browser.newPage();
         await page.emulate(devices.devicesMap['iPhone X']);
         await page.setRequestInterception(true);
-        let result = null;
         page.on('request', request => {
           const url = request.url();
           if (request.resourceType() === 'image' || reSkip.test(url)) {
@@ -47,6 +47,7 @@ async function getKey() {
           } else {
               if (reMatch.test(url)) {
                   result = url.match(reMatch)[1];
+                  console.log(url, result);
               } else {
                   console.log(url);
               }
