@@ -24,6 +24,7 @@ tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
 env_logger = "0.7.1"
 
 ansi-escapes = "0.1"
+crossterm = "0.17.5"
 
 auth = { path = "../auth" }
 arrange_millis = { path = "../arrange_millis" }

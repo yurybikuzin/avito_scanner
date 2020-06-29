@@ -94,103 +94,24 @@ pub struct CallbackArg {
     pub per_millis: u128,
 }
 
-// pub async fn non_existent_only<'a>(
-//     ids: &'a ids::Ret, 
-//     out_dir: &'a Path, 
-//     thread_limit_file: usize, 
-//     callback: Option<&dyn Fn(CallbackArg)>,
-// ) -> Result<ids::Ret> {
-//     let mut now = Instant::now();
-//     let mut ids_non_existent = HashSet::new();
-//
-//     let mut fut_queue = FuturesUnordered::new();
-//
-//     let mut id_i = 0;
-//     let ids_len = ids.len();
-//     let ids = ids.iter().collect::<Vec<&u64>>();
-//     while id_i < thread_limit_file && id_i < ids_len {
-//         let id = *ids[id_i];
-//         push_fut_check!(fut_queue, id, out_dir);
-//         id_i += 1;
-//     }
-//     let mut elapsed_qt = 0;
-//     let mut remained_qt = ids.len();
-//     let mut last_callback = Instant::now();
-//     info!("fut_queue.len(): {}", fut_queue.len());
-//     loop {
-//         select! {
-//             ret = fut_queue.select_next_some() => {
-//                 match ret {
-//                     Err(err) => {
-//                         return Err(err.context("cards::non_existent_only"));
-//                     },
-//                     Ok(ret) => {
-//                         match ret {
-//                             OpRet::Check(check::Ret{id}) => {
-//                                 if let Some(callback) = callback {
-//                                     elapsed_qt += 1;
-//                                     if remained_qt > 0 {
-//                                         remained_qt -= 1;
-//                                     }
-//                                     if Instant::now().duration_since(last_callback).as_millis() > 100 {
-//                                         let elapsed_millis = Instant::now().duration_since(now).as_millis(); 
-//                                         let per_millis = elapsed_millis / elapsed_qt as u128;
-//                                         let remained_millis = per_millis * remained_qt as u128;
-//                                         callback(CallbackArg {
-//                                             elapsed_qt,
-//                                             remained_qt,
-//                                             elapsed_millis, 
-//                                             remained_millis, 
-//                                             per_millis,
-//                                         });
-//                                         last_callback = Instant::now();
-//                                     }
-//                                 }
-//                                 if let Some(id) = id {
-//                                     if ids_non_existent.len() == 0 {
-//                                         now = Instant::now();
-//                                     }
-//                                     ids_non_existent.insert(id);
-//                                 }
-//                                 if id_i < ids_len {
-//                                     let client = reqwest::Client::new();
-//                                     let id = *ids[id_i];
-//                                     push_fut_check!(fut_queue, id, out_dir);
-//                                     id_i += 1;
-//                                 }
-//                             },
-//                             _ => unreachable!(),
-//                         }
-//                     },
-//                 }
-//             },
-//             complete => {
-//                 break;
-//             },
-//         }
-//     }
-//     info!("{}, cards::non_existent_only: ret.len(): {}", 
-//         arrange_millis::get(Instant::now().duration_since(now).as_millis()), 
-//         ids_non_existent.len(),
-//     );
-//     
-//     Ok(ids_non_existent)
-// }
+pub type Ret = ();
 
 pub async fn fetch_and_save<'a, F: Future<Output=Result<String>>>(
     arg: &Arg<'a, F>, 
     callback: Option<&dyn Fn(CallbackArg)>,
-) -> Result<()> {
+) -> Result<Ret> {
     let now = Instant::now();
-    let mut fut_queue = FuturesUnordered::new();
 
     let mut ids_non_existent: Vec<u64> = Vec::new();
     let mut ids_non_existent_i = 0;
 
-    let mut auth: Option<String> = None;
+
     let mut id_i = 0;
     let ids_len = arg.ids.len();
     let ids = arg.ids.iter().collect::<Vec<&u64>>();
+
+    let mut auth: Option<String> = None;
+    let mut fut_queue = FuturesUnordered::new();
     while id_i < arg.thread_limit_file && id_i < ids_len {
         let id = *ids[id_i];
         push_fut_check!(fut_queue, id, arg.out_dir);
