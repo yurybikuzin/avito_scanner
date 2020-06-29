@@ -458,73 +458,15 @@ mod tests {
         };
 
         helper(&arg).await?;
-        // let cmd = ansi_escapes::EraseLines(2);
-        // let (_, mut row_prev) = crossterm::cursor::position()?;
-        // println!("ids::get");
-        // let (mut col_last, mut row_last) = crossterm::cursor::position();
-        // let ids = get(&arg, Some(&|arg: CallbackArg| -> Result<()> {
-        //     let (col_new, row_new) = crossterm::cursor::position()?;
-        //     if row_new == row_last && col_new == col_last {
-        //         for _ in 0..=row_new - row_prev + 1 {
-        //             println!(ansi_escapes::EraseLines(2));
-        //         }
-        //     }
-        //     row_prev = crossterm::cursor::position()?.1;
-        //     println!("ids::get: time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
-        //         arrange_millis::get(arg.elapsed_millis), 
-        //         arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
-        //         arrange_millis::get(arg.remained_millis), 
-        //         arrange_millis::get(arg.per_millis), 
-        //         arg.elapsed_qt,
-        //         arg.elapsed_qt + arg.remained_qt,
-        //         arg.remained_qt,
-        //         arg.ids_len,
-        //     );
-        //     (col_last, row_last) = crossterm::cursor::position()?;
-        //     Ok(())
-        // })).await?;
-        // println!("{}", cmd);
-        // println!("ids_len: {}", ids.len());
-        
         Ok(())
     }
 
-use std::io::{stdout , Write};
-
-use crossterm::{
-    queue,
-    // QueueableCommand,
-    // ExecutableCommand, 
-    terminal, 
-    cursor,
-    style::Print,
-};
-
     async fn helper<'a, F>(arg: &Arg<'a, F>) -> Result<()> 
-    where F: Future<Output=Result<String>>,
+        where F: Future<Output=Result<String>>,
     {
 
-        // let mut stdout = stdout();
-        // stdout.some();  
-        // let mut stdout = margin_bottom(stdout(), 2)?;
-        //
-        // let mut row_prev = crossterm::cursor::position()?.1;
-        // let rows = crossterm::terminal::size()?.1;
-        // if row_prev == rows - 1 {
-        //     row_prev -= 2;
-        //     queue!(stdout, 
-        //         terminal::ScrollUp(2),
-        //         cursor::MoveTo(0, row_prev),
-        //     );
-        // }
-        // stdout.flush();
-
-        // println!("ids::get");
-        // let mut row_last = crossterm::cursor::position()?.1;
         let mut term = Term::init("ids::get".to_owned())?;
-
         let ids = get(&arg, Some(|arg: CallbackArg| -> Result<()> {
-            // term = 
             term.output(format!("ids::get: time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
                 arrange_millis::get(arg.elapsed_millis), 
                 arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
@@ -534,182 +476,11 @@ use crossterm::{
                 arg.elapsed_qt + arg.remained_qt,
                 arg.remained_qt,
                 arg.ids_len,
-            ))?;
-
-            // let (col_new, row_new) = crossterm::cursor::position()?;
-            // if row_new == row_last && col_new == 0 {
-            //     queue!(stdout,
-            //         cursor::MoveTo(0, row_prev)
-            //     );
-            // }
-            //
-            // // stdout = margin_bottom(stdout, 2)?;
-            //
-            // row_prev = crossterm::cursor::position()?.1;
-            // let rows = crossterm::terminal::size()?.1;
-            // if row_prev == rows - 1 {
-            //     row_prev -= 2;
-            //     queue!(stdout,
-            //         terminal::ScrollUp(2),
-            //         cursor::MoveTo(0, row_prev)
-            //     );
-            // }
-            // stdout.flush();
-            //
-            // println!("ids::get: time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
-            //     arrange_millis::get(arg.elapsed_millis), 
-            //     arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
-            //     arrange_millis::get(arg.remained_millis), 
-            //     arrange_millis::get(arg.per_millis), 
-            //     arg.elapsed_qt,
-            //     arg.elapsed_qt + arg.remained_qt,
-            //     arg.remained_qt,
-            //     arg.ids_len,
-            // );
-            // row_last = crossterm::cursor::position()?.1;
-
-            Ok(())
+            ))
         })).await?;
         println!("ids_len: {}", ids.len());
         Ok(())
     }
-
-    // fn margin_bottom(mut stdout: std::io::Stdout, lines: u16) -> Result<std::io::Stdout> {
-    //     let mut row_prev = crossterm::cursor::position()?.1;
-    //     let rows = crossterm::terminal::size()?.1;
-    //     if row_prev >= rows - lines {
-    //         row_prev -= lines;
-    //         queue!(stdout, 
-    //             terminal::ScrollUp(lines),
-    //             cursor::MoveTo(0, row_prev),
-    //         );
-    //     }
-    //     stdout.flush();
-    //     Ok(stdout)
-    // }
-
-    struct TermStdout {
-        stdout: std::io::Stdout,
-    }
-
-    impl TermStdout {
-        fn new() -> Self {
-            Self {
-                stdout: stdout()
-            }
-        }
-        fn output(&mut self, s: String) -> Result<(u16, u16)> {
-            let mut row_prev = crossterm::cursor::position()?.1;
-            let rows = crossterm::terminal::size()?.1;
-            if row_prev == rows - 1 {
-                row_prev -= 2;
-                queue!(self.stdout, 
-                    terminal::ScrollUp(2),
-                    cursor::MoveTo(0, row_prev),
-                )?;
-            }
-            queue!(self.stdout,
-                Print(s),
-                Print("\n".to_owned())
-            )?;
-            self.stdout.flush()?;
-            let row_last = crossterm::cursor::position()?.1;
-            Ok((row_prev, row_last))
-        }
-    }
-
-    struct Term {
-        stdout: TermStdout,
-        // stdout: std::io::Stdout,
-        row_prev: u16,
-        row_last: u16,
-    }
-
-    impl Term {
-        pub fn init(s: String) -> Result<Self> {
-            let mut stdout = TermStdout::new();
-            // stdout.some();
-
-            // let mut stdout = stdout();
-            //
-
-            let (row_prev, row_last) = stdout.output(s)?;
-            // let (stdout, row_prev, row_last) = Self::helper(stdout, s)?;
-            // let mut row_prev = crossterm::cursor::position()?.1;
-            // let rows = crossterm::terminal::size()?.1;
-            // if row_prev == rows - 1 {
-            //     row_prev -= 2;
-            //     queue!(stdout, 
-            //         terminal::ScrollUp(2),
-            //         cursor::MoveTo(0, row_prev),
-            //     )?;
-            // }
-            // queue!(stdout,
-            //     Print(s),
-            //     Print("\n".to_owned())
-            // )?;
-            // stdout.flush()?;
-            // let row_last = crossterm::cursor::position()?.1;
-
-            Ok(Self {
-                stdout,
-                row_prev,
-                row_last,
-            })
-        }
-        pub fn output(&mut self, s: String) -> Result<()> {
-            let (col_new, row_new) = crossterm::cursor::position()?;
-            if row_new == self.row_last && col_new == 0 {
-                queue!(self.stdout.stdout,
-                    cursor::MoveTo(0, self.row_prev)
-                )?;
-            }
-
-            let (row_prev, row_last) = self.stdout.output(s)?;
-            // let (stdout, row_prev, row_last) = Self::helper(self.stdout, s)?;
-            // self.stdout = stdout;
-            self.row_prev = row_prev;
-            self.row_last = row_last;
-
-            // self.row_prev = crossterm::cursor::position()?.1;
-            // let rows = crossterm::terminal::size()?.1;
-            // if self.row_prev == rows - 1 {
-            //     self.row_prev -= 2;
-            //     queue!(self.stdout,
-            //         terminal::ScrollUp(2),
-            //         cursor::MoveTo(0, self.row_prev)
-            //     )?;
-            // }
-            // queue!( self.stdout, 
-            //     Print(s), 
-            //     Print("\n".to_string())
-            // )?;
-            // self.stdout.flush()?;
-            // self.row_last = crossterm::cursor::position()?.1;
-
-            Ok(())
-        }
-        fn helper(mut stdout: std::io::Stdout, s: String) -> Result<(std::io::Stdout, u16, u16,)> {
-            let mut row_prev = crossterm::cursor::position()?.1;
-            let rows = crossterm::terminal::size()?.1;
-            if row_prev == rows - 1 {
-                row_prev -= 2;
-                queue!(stdout, 
-                    terminal::ScrollUp(2),
-                    cursor::MoveTo(0, row_prev),
-                )?;
-            }
-            queue!(stdout,
-                Print(s),
-                Print("\n".to_owned())
-            )?;
-            stdout.flush()?;
-            let row_last = crossterm::cursor::position()?.1;
-            Ok((stdout, row_prev, row_last))
-        }
-    }
-
-
 
     async fn get_auth() -> Result<String> {
         println!("Получение токена авторизации . . .");
@@ -718,5 +489,6 @@ use crossterm::{
         println!("Токен авторизации получен, {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()));
         Ok(auth)
     }
+
 }
 
