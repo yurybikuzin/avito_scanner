@@ -506,9 +506,9 @@ use crossterm::{
         let mut row_prev = crossterm::cursor::position()?.1;
         let rows = crossterm::terminal::size()?.1;
         if row_prev == rows - 1 {
+            row_prev -= 2;
             stdout().execute(terminal::ScrollUp(2))?;
             stdout().execute(cursor::MoveTo(0, row_prev))?;
-            row_prev -= 2;
         }
         println!("ids::get");
         let mut row_last = crossterm::cursor::position()?.1;
@@ -523,8 +523,8 @@ use crossterm::{
             row_prev = crossterm::cursor::position()?.1;
             let rows = crossterm::terminal::size()?.1;
             if row_prev == rows - 1 {
-                stdout().execute(terminal::ScrollUp(2))?;
                 row_prev -= 2;
+                stdout().execute(terminal::ScrollUp(2))?;
                 stdout().execute(cursor::MoveTo(0, row_prev))?;
             }
 
