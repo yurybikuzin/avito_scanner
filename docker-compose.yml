@@ -16,6 +16,7 @@ services:
         volumes:
             - ./docker/proj/sh:/sh
             - .:/proj
+            - ./registry:/usr/local/cargo/registry
 
     auth:
         container_name: ${BW_PROJ_NAME}-auth
