@@ -23,7 +23,7 @@ RUN yarn global add nodemon
 RUN mkdir /proj
 WORKDIR /proj
 COPY ./copy/package.json .
-COPY ./copy/license.md .
+COPY ./copy/LICENSE.md .
 COPY ./copy/yarn.lock .
 RUN yarn 
 

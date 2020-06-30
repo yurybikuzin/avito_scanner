@@ -1,7 +1,7 @@
-# Avito scanner (Rust and NodeJS::Puppeeteer)
-
+# Echo-server (Rust/Rocket) 
 <!-- vim-markdown-toc Redcarpet -->
 
+* [About](#about)
 * [Development](#development)
     * [Prerequisites](#prerequisites)
         * [Git](#git)
@@ -12,9 +12,12 @@
             * [cargo](#cargo)
     * [Do not forget to stop docker containers after work is over](#do-not-forget-to-stop-docker-containers-after-work-is-over)
 * [Files](#files)
-* [Fairplay](#fairplay)
 
 <!-- vim-markdown-toc -->
+
+## About
+
+simple echo-server for proxy-checker
 
 ## Development
 
@@ -39,7 +42,7 @@ https://docs.docker.com/compose/install
 - clone repo: 
 
 ```
-git clone git@github.com:yurybikuzin/avito_scanner.git
+git clone git@github.com:yurybikuzin/echo_server.git
 ```
 
 - up dev container: 
@@ -53,9 +56,9 @@ docker-compose up -d
 ##### cargo
 
 ```
-docker exec -it avito-proj cargo
-docker exec -it -e RUST_LOG=info avito-proj cargo test -p diaps
-docker exec -it avito-proj cargo run
+docker exec -it echo-proj cargo
+docker exec -it -e RUST_LOG=info echo-proj cargo test -p echo
+docker exec -it echo-proj cargo run
 ```
 
 ### Do not forget to stop docker containers after work is over
@@ -73,16 +76,7 @@ docker-compose down
 - `.env` - required for `docker-compose up -d`
 - `docker/refresh.sh` - tool for rebuilding docker container for service from `docker-compose.yml` (`proj` by default)
 - `docker/proj/Dockerfile` - Dockerfile for service `proj`, mentioned in `docker-compose.yml`
-- `docker/proj/sh/*` - helper sh-scripts used in `avito-proj` docker container
-- `docker/auth/Dockerfile/` - Dockerfile for service `auth`, mentioned in `docker-compose.yml`
-- `docker/auth/sh/*` - helper sh-scripts used in `avito-auth` docker container
-- `docker/auth/src/*` - neccessary files for building docker container of service `auth`
+- `docker/proj/sh/*` - helper sh-scripts used in `echo-proj` docker container
 - `Cargo.toml`, `Cargo.lock` - [cargo](https://doc.rust-lang.org/cargo/) files
-- `diaps/*`, `ids/*`, `cards/*`, `scanner/*` - scanner source files, written in [Rust](https://www.rust-lang.org/)
-- `out/*` - scanner output files
 
-## Fairplay
-
-https://vimeo.com/user58195081/review/394860047/b827eafd0d
-23:43-24:18
 

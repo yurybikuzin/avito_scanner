@@ -1,4 +1,4 @@
-*.sw?
-node_modules/
+*.swp
+*.swo
 target/
 

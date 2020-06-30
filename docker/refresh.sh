@@ -1,5 +1,7 @@
 #!/usr/bin/env bash 
 
+# Version 0.1.1, 2020-06-30
+
 cmdname=${0##*/}
 
 echoerr() { 
@@ -77,14 +79,14 @@ if [[ ! $bw_proj_version ]]; then
     exit 1
 fi
 
-gitlab_proj_version=$(cat .gitlab-ci.yml | sed -nr "s/^[[:space:]]*image:[[:space:]]*bazawinner\/dev-${bw_proj_name}-proj:([^[:space:]])/\1/p;")
-if [[ ! $gitlab_proj_version ]]; then
-    echoerr "image: dev-${bw_proj_name}-proj:VERSION not found in file'.gitlab-ci.yml'"
+gitlab_service_version=$(cat .gitlab-ci.yml | sed -nr "s/^[[:space:]]*image:[[:space:]]*bazawinner\/dev-${bw_proj_name}-$service:([^[:space:]])/\1/p;")
+if [[ ! $gitlab_service_version ]]; then
+    echoerr "image: dev-${bw_proj_name}-$service:VERSION not found in file'.gitlab-ci.yml'"
     exit 1
 fi
 
-if [[ ! $build_only && $bw_proj_version == $gitlab_proj_version ]]; then
-    echoerr "BW_PROJ_VERSION ($bw_proj_version) in file'.env' must differ (be bigger) than version ($gitlab_proj_version) in file'.gitlab-ci.yml' in line: image: bazawinner/dev-${bw_proj_name}-proj:$gitlab_proj_version"
+if [[ ! $build_only && $bw_proj_version == $gitlab_service_version ]]; then
+    echoerr "BW_PROJ_VERSION ($bw_proj_version) in file'.env' must differ (be bigger) than version ($gitlab_service_version) in file'.gitlab-ci.yml' in line: image: bazawinner/dev-${bw_proj_name}-$service:$gitlab_service_version"
     exit 1
 fi
 
