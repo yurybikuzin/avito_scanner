@@ -30,8 +30,6 @@ const CARD_OUT_DIR_SPEC: &str = "out";
 
 use term::Term;
 
-// let mut auth: Some(String) = None;
-
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -72,8 +70,7 @@ async fn main() -> Result<()> {
     let thread_limit_file = env::get("AVITO_THREAD_LIMIT_FILE", THREAD_LIMIT_FILE)?;
     let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
 
-    // let mut auth: Option<String> = None;
-    let mut auth: Auth = Auth::new();
+    let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 
     let ids = match id_store.get_ids(&params, id_fresh_duration) {
         Some(item) => {
@@ -105,26 +102,25 @@ async fn main() -> Result<()> {
             let diaps_ret = match diap_store.get_diaps(&diaps_arg, diap_fresh_duration) {
                 Some(item) => &item.ret,
                 None => {
-                    // auth = Some(auth.unwrap_or(auth::get().await?));
-                    // auth = get_auth(auth::Arg::new()).await?;
-                    let mut term = Term::init(&term::Arg::new().header("Определение диапазонов цен . . ."))?;
+                    let mut term = Term::init(term::Arg::new().header("Определение диапазонов цен . . ."))?;
                     let start = Instant::now();
                     let diaps_ret = diaps::get(
-                        &auth.get().await?,
-                        // auth.as_ref().unwrap(), 
-                        &diaps_arg, Some(|arg: diaps::CallbackArg| -> Result<()> {
-                        term.output(format!("count_total: {}, checks_total: {}, elapsed_millis: {}, per_millis: {}, detected_diaps: {}, price: {}..{}/{}, count: {}", 
-                            arg.count_total,
-                            arg.checks_total,
-                            arrange_millis::get(arg.elapsed_millis),
-                            arrange_millis::get(arg.per_millis),
-                            arg.diaps_detected,
-                            if arg.price_min.is_none() { "".to_owned() } else { arg.price_min.unwrap().to_string() },
-                            if arg.price_max.is_none() { "".to_owned() } else { arg.price_max.unwrap().to_string() },
-                            if arg.price_max_delta.is_none() { "".to_owned() } else { arg.price_max_delta.unwrap().to_string() },
-                            if arg.count.is_none() { "".to_owned() } else { arg.count.unwrap().to_string() },
-                        ))
-                    })).await?;
+                        &mut auth,
+                        diaps_arg.clone(), 
+                        Some(|arg: diaps::CallbackArg| -> Result<()> {
+                            term.output(format!("count_total: {}, checks_total: {}, elapsed_millis: {}, per_millis: {}, detected_diaps: {}, price: {}..{}/{}, count: {}", 
+                                arg.count_total,
+                                arg.checks_total,
+                                arrange_millis::get(arg.elapsed_millis),
+                                arrange_millis::get(arg.per_millis),
+                                arg.diaps_detected,
+                                if arg.price_min.is_none() { "".to_owned() } else { arg.price_min.unwrap().to_string() },
+                                if arg.price_max.is_none() { "".to_owned() } else { arg.price_max.unwrap().to_string() },
+                                if arg.price_max_delta.is_none() { "".to_owned() } else { arg.price_max_delta.unwrap().to_string() },
+                                if arg.count.is_none() { "".to_owned() } else { arg.count.unwrap().to_string() },
+                            ))
+                        })
+                    ).await?;
                     let diaps_len = diaps_ret.diaps.len();
                     diap_store.set_diaps(&diaps_arg, diaps_ret);
                     diap_store.to_file(diap_store_file_spec).await?;
@@ -132,30 +128,19 @@ async fn main() -> Result<()> {
                     &diap_store.get_diaps(&diaps_arg, diap_fresh_duration).unwrap().ret
                 },
             };
-            // auth = Some(auth.unwrap_or(auth::get().await?));
-            // auth = get_auth().await?;
 
             let items_per_page = env::get("AVITO_ITEMS_PER_PAGE", ITEMS_PER_PAGE)?;
 
             let ids_arg = ids::Arg {
-                // auth: auth.as_ref().unwrap(),
-                // get_auth: || auth.get(),
-                get_auth: || auth::get(Some(auth::Arg::new())),
-                //     || {
-                //     auth = get_auth(auth).await?;
-                //     Ok(auth.unwrap())
-                // },
-                // get_auth: || auth::get(Some(auth::Arg::new())),
                 params: &params,
                 diaps_ret: &diaps_ret, 
                 thread_limit_network,
                 items_per_page,
                 retry_count,
             };
-            // let cmd = ansi_escapes::EraseLines(2);
-            let mut term = Term::init(&term::Arg::new().header("Получение списка идентификаторов . . ."))?;
+            let mut term = Term::init(term::Arg::new().header("Получение списка идентификаторов . . ."))?;
             let start = Instant::now();
-            let ids_ret = ids::get(&ids_arg, Some(|arg: ids::CallbackArg| -> Result<()> {
+            let ids_ret = ids::get(&mut auth, ids_arg, Some(|arg: ids::CallbackArg| -> Result<()> {
                 term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
                     arrange_millis::get(arg.elapsed_millis), 
                     arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
@@ -179,42 +164,8 @@ async fn main() -> Result<()> {
 
     let out_dir = &Path::new(CARD_OUT_DIR_SPEC);
 
-    // let cmd = ansi_escapes::EraseLines(2);
-    // info!("thread_limit_file: {}", thread_limit_file);
-    // let now = Instant::now();
-    // println!("cards::non_existent_only");
-    // let ids = cards::non_existent_only(&ids, out_dir, thread_limit_file, None).await?;
-    // // println!("{}, cards::non_existent_only: {}", cmd, ids.len());
-    // println!("{}, cards::non_existent_only: {}", arrange_millis::get(Instant::now().duration_since(now).as_millis()), ids.len());
-
-    // let cmd = ansi_escapes::EraseLines(2);
-    // info!("thread_limit_file: {}", thread_limit_file);
-    // println!("cards::non_existent_only");
-    // let ids = cards::non_existent_only(&ids, out_dir, thread_limit_file, &|arg: cards::CallbackArg| {
-    //     println!("{}cards::non_existent_only: time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
-    //         cmd,
-    //         arrange_millis::get(arg.elapsed_millis), 
-    //         arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
-    //         arrange_millis::get(arg.remained_millis), 
-    //         arrange_millis::get(arg.per_millis), 
-    //         arg.elapsed_qt,
-    //         arg.elapsed_qt + arg.remained_qt,
-    //         arg.remained_qt,
-    //     );
-    // }).await?;
-    // println!("{}, cards::non_existent_only: {}", cmd, ids.len());
-
-    // let cmd = ansi_escapes::CursorShow;
-    // auth = Some(auth.unwrap_or(auth::get().await?));
-    // auth = get_auth().await?;
-    // println!("cards::fetch_and_save");
-    let mut term = Term::init(&term::Arg::new().header("Получение объявлений . . ."))?;
+    let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."))?;
     let arg = cards::Arg {
-        get_auth: || auth::get(Some(auth::Arg::new())),
-        // get_auth: || {
-        //     auth = get_auth(auth)?;
-        //     Ok(auth.unwrap())
-        // },
         ids: &ids, 
         out_dir,
         thread_limit_network,
@@ -222,7 +173,7 @@ async fn main() -> Result<()> {
         retry_count,
     };
     let start = Instant::now();
-    let ret = cards::fetch_and_save(&arg, Some(|arg: cards::CallbackArg| -> Result<()> {
+    let ret = cards::fetch_and_save(&mut auth, arg, Some(|arg: cards::CallbackArg| -> Result<()> {
         term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
             arrange_millis::get(arg.elapsed_millis), 
             arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
@@ -237,38 +188,3 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-
-struct Auth (Option<String>);
-impl Auth {
-    fn new() -> Self {
-        Self(None)
-    }
-    async fn get(&mut self) -> Result<String> {
-        match &self.0 {
-            Some(auth) => {
-                Ok(auth.to_owned())
-            }
-            None => {
-                self.0 = Some(auth::get(Some(auth::Arg::new())).await?);
-                Ok(self.0.as_deref().unwrap().to_owned())
-            }
-        }
-    }
-}
-
-
-// async fn get_auth(auth: Option<String>) -> Result<Option<String>> {
-//     Ok(Some(auth.unwrap_or(auth::get(Some(auth::Arg::new())).await?)))
-//     // Ok(Some(match auth {
-//     //     Some(auth) => auth,
-//     //     None => {
-//     //         // println!("Получение токена авторизации . . .");
-//     //         // let start = Instant::now();
-//     //         // let auth = auth::get().await?
-//     //         // let auth = auth::get(Some(auth::Arg::new())).await?;
-//     //         // println!("Токен авторизации получен, {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()));
-//     //         // auth
-//     //         auth::get(Some(auth::Arg::new())).await?
-//     //     },
-//     // }))
-// }

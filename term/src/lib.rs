@@ -48,7 +48,7 @@ impl Arg {
 }
 
 impl Term {
-    pub fn init(arg: &Arg) -> Result<Self> {
+    pub fn init(arg: Arg) -> Result<Self> {
         let mut stdout = TermStdout::new();
         let anchors = stdout.output(arg.header.as_deref())?;
         let anchors = if arg.is_merged_header {
@@ -153,7 +153,7 @@ mod tests {
             info_chance_treshold: 3,
         };
         let mut term = Term::init(
-            &super::Arg::new().header("long_live . . .")
+            super::Arg::new().header("long_live . . .")
         )?;
         long_live(&arg, Some(|arg: CallbackArg| -> Result<()> {
             term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
@@ -180,7 +180,7 @@ mod tests {
             info_chance_treshold: 3,
         };
         let mut term = Term::init(
-            &super::Arg::new().header("long_live . . .").merge()
+            super::Arg::new().header("long_live . . .").merge()
         )?;
         long_live(&arg, Some(|arg: CallbackArg| -> Result<()> {
             term.output(format!("long_live: time: {}/{}-{}, per: {}, qt: {}/{}-{}", 

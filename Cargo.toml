@@ -1,2 +1,13 @@
 [workspace]
-members = [ "term", "env", "arrange_millis", "auth", "diaps", "diap_store", "ids", "id_store", "cards", "scanner", "proxy_checker" ]
+members = [ 
+    "term", 
+    "env", 
+    "arrange_millis", 
+    "auth", "diaps", 
+    "diap_store", 
+    "ids", 
+    "id_store", 
+    "cards", 
+    "scanner", 
+    "proxy_checker" 
+]

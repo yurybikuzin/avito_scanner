@@ -85,6 +85,34 @@ pub async fn get(arg: Option<Arg>) -> Result<String> {
     }
 }
 
+pub struct Lazy {
+    arg: Option<Arg>,
+    key: Option<String>,
+}
+
+impl Lazy {
+    pub fn new(arg: Option<Arg>) -> Self { // arg=Some(key::Arg::new())
+        Self {
+            arg,
+            key: None,
+        }
+    }
+    pub async fn key(&mut self) -> Result<String> {
+        match &self.key {
+            Some(key) => {
+                Ok(key.to_owned())
+            }
+            None => {
+                let mut arg: Option<Arg> = None;
+                std::mem::swap(&mut arg, &mut self.arg);
+                let key = get(arg).await?;
+                self.key = Some(key.to_owned());
+                Ok(key)
+            }
+        }
+    }
+}
+
 // ============================================================================
 // ============================================================================
 // ============================================================================
@@ -102,10 +130,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_works() -> Result<()> {
+    async fn test_get() -> Result<()> {
         init();
 
-        let _ = get(Some(&Arg::new())).await?;
+        let _ = get(Some(Arg::new())).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_lazy() -> Result<()> {
+        init();
+
+        let mut auth = Lazy::new(Some(Arg::new()));
+        assert_eq!(auth.key, None);
+
+        let key = auth.key().await?;
+        info!("key: {}", key);
+
+        let key2 = auth.key().await?;
+        assert_eq!(key2, key);
 
         Ok(())
     }

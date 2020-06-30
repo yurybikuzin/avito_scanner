@@ -70,17 +70,18 @@ async fn test_fetch_and_save() -> Result<()> {
     let out_dir = &Path::new("out_test");
     let arg = Arg {
         // get_auth: || auth::get(Some(auth::Arg::new())),
-        get_auth: || auth::get(Some(auth::Arg::new())),
+        // get_auth: || auth::get(Some(auth::Arg::new())),
         ids: &ids,
         out_dir,
         thread_limit_network: 1,
         thread_limit_file: 12,
         retry_count: 3,
     };
+    let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 
-    let mut term = Term::init(&term::Arg::new().header("Получение объявлений . . ."))?;
+    let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."))?;
     let start = Instant::now();
-    let ret = fetch_and_save(&arg, Some(|arg: CallbackArg| -> Result<()> {
+    let ret = fetch_and_save(&mut auth, arg, Some(|arg: CallbackArg| -> Result<()> {
         term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
             arrange_millis::get(arg.elapsed_millis), 
             arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 

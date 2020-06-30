@@ -7,12 +7,10 @@ use anyhow::{Result, Error, bail, anyhow, Context};
 
 use std::time::Instant;
 use std::path::Path;
-// use std::collections::HashSet;
 
 #[macro_use] extern crate lazy_static;
 
 use futures::{
-    Future,
     select,
     stream::{
         FuturesUnordered,
@@ -28,11 +26,7 @@ mod fetch;
 // ============================================================================
 // ============================================================================
 
-pub struct Arg<'a, F> 
-where 
-    F: Future<Output=Result<String>>
-{
-    pub get_auth: fn() -> F, // https://stackoverflow.com/questions/58173711/how-can-i-store-an-async-function-in-a-struct-and-call-it-from-a-struct-instance
+pub struct Arg<'a> {
     pub ids: &'a ids::Ret, 
     pub out_dir: &'a Path, 
     pub thread_limit_network: usize,
@@ -43,17 +37,9 @@ where
 macro_rules! push_fut_fetch {
     ($fut_queue: expr, $client: expr, $auth: expr, $arg: expr, $ids_non_existent: expr, $ids_non_existent_i: expr) => {
         let id = $ids_non_existent[$ids_non_existent_i];
-        let auth = match &$auth {
-            Some(auth) => auth.to_owned(),
-            None => {
-                let auth = ($arg.get_auth)().await?;
-                $auth = Some(auth.to_owned());
-                auth
-            },
-        };
         let arg = OpArg::Fetch (fetch::Arg {
             client: $client,
-            auth,
+            auth: $auth.key().await?,
             id: id,
             retry_count: $arg.retry_count,
         });
@@ -98,12 +84,12 @@ pub struct Ret {
     pub received_qt: usize,
 }
 
-pub async fn fetch_and_save<'a, F, Cb>(
-    arg: &Arg<'a, F>, 
+pub async fn fetch_and_save<'a, Cb>(
+    auth: &mut auth::Lazy,
+    arg: Arg<'a>, 
     mut callback: Option<Cb>,
 ) -> Result<Ret>
 where 
-    F: Future<Output=Result<String>>,
     Cb: FnMut(CallbackArg) -> Result<()>,
 {
     let now = Instant::now();
@@ -115,7 +101,6 @@ where
     let ids_len = arg.ids.len();
     let ids = arg.ids.iter().collect::<Vec<&u64>>();
 
-    let mut auth: Option<String> = None;
     let mut fut_queue = FuturesUnordered::new();
     while id_i < arg.thread_limit_file && id_i < ids_len {
         let id = *ids[id_i];

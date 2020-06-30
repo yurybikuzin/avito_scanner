@@ -13,7 +13,6 @@ use http::StatusCode;
 use serde_json::Value;
 
 use futures::{
-    Future,
     select,
     stream::{
         FuturesUnordered,
@@ -24,12 +23,7 @@ use futures::{
 // ============================================================================
 // ============================================================================
 
-// pub struct Arg<'a> {
-pub struct Arg<'a, F> 
-where 
-    F: Future<Output=Result<String>>
-{
-    pub get_auth: fn() -> F, // https://stackoverflow.com/questions/58173711/how-can-i-store-an-async-function-in-a-struct-and-call-it-from-a-struct-instance
+pub struct Arg<'a> {
     pub params: &'a str,
     pub diaps_ret: &'a diaps::Ret, 
     pub items_per_page: usize,
@@ -39,18 +33,9 @@ where
 
 macro_rules! push_fut {
     ($fut_queue: expr, $client: expr, $auth: expr, $arg: expr, $page: expr, $diap: expr) => {
-        let auth = match &$auth {
-            Some(auth) => auth.to_owned(),
-            None => {
-                let auth = ($arg.get_auth)().await?;
-                $auth = Some(auth.to_owned());
-                auth
-            },
-        };
         let fetch_arg = FetchArg {
             client: $client,
-            auth,
-            // auth: $arg.auth.to_owned(),
+            auth: $auth.key().await?,
             diap: $diap, 
             page: $page,
             params: $arg.params.to_owned(),
@@ -74,16 +59,12 @@ pub struct CallbackArg {
 
 pub type Ret = HashSet<u64>;
 
-// pub async fn get<'a>(
-//     arg: Arg<'a>,
-pub async fn get<'a, F, Cb>(
-    arg: &Arg<'a, F>, 
+pub async fn get<'a, Cb>(
+    auth: &mut auth::Lazy,
+    arg: Arg<'a>, 
     mut callback: Option<Cb>,
-    // callback: Option<&dyn Fn(CallbackArg) -> Result<()>>,
 ) -> Result<Ret>
 where 
-    F: Future<Output=Result<String>>,
-    // Cb: FnMut(CallbackArg) -> Result<()>,
     Cb: FnMut(CallbackArg) -> Result<()>,
  {
     let start = Instant::now();
@@ -91,7 +72,6 @@ where
     let mut diap_i = 0;
     let diaps_len = arg.diaps_ret.diaps.len();
 
-    let mut auth: Option<String> = None;
     let mut fut_queue = FuturesUnordered::new();
     while diap_i < arg.thread_limit_network && diap_i < diaps_len {
         let client = reqwest::Client::new();
@@ -244,40 +224,6 @@ async fn fetch(arg: FetchArg) -> Result<FetchRet>{
         }
         text
     }.context("ids::fetch")?;
-    // let text = {
-    //     let text: String;
-    //     let mut remained = arg.retry_count;
-    //     loop {
-    //         let resp = arg.client.get(url.clone()).send().await;
-    //         match resp {
-    //             Err(err) => {
-    //                 if remained > 0 {
-    //                     remained -= 1;
-    //                     continue;
-    //                 } else {
-    //                     return Err(Error::new(err))
-    //                 }
-    //             },
-    //             Ok(resp) => {
-    //                 match resp.text().await {
-    //                     Ok(t) => {
-    //                         text = t;
-    //                         break;
-    //                     },
-    //                     Err(err) => {
-    //                         if remained > 0 {
-    //                             remained -= 1;
-    //                             continue;
-    //                         } else {
-    //                             return Err(Error::new(err))
-    //                         }
-    //                     },
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     text
-    // };
     trace!("{} ms , ids::fetch({:?})", Instant::now().duration_since(now).as_millis(), url.as_str());
 
     let json: Value = serde_json::from_str(&text).map_err(|_| anyhow!("failed to parse json from: {}", text))?;
@@ -382,6 +328,8 @@ mod tests {
         INIT.call_once(|| env_logger::init());
     }
 
+    use term::Term;
+
     const PARAMS: &str = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
     const THREAD_LIMIT_NETWORK: usize = 1;
     const ITEMS_PER_PAGE: usize = 50;
@@ -448,28 +396,17 @@ mod tests {
         let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
 
         let arg = Arg {
-            get_auth: || auth::get(Some(auth::Arg::new())),
-            // get_auth,
             params: &params,
             diaps_ret: &diaps_ret, 
             thread_limit_network,
             items_per_page,
             retry_count,
         };
+        let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 
-        helper(&arg).await?;
-        Ok(())
-    }
-
-    use term::Term;
-
-    async fn helper<'a, F>(arg: &Arg<'a, F>) -> Result<()> 
-        where F: Future<Output=Result<String>>,
-    {
-
-        let mut term = Term::init(&term::Arg::new().header("Получение списка идентификаторов . . ."))?;
+        let mut term = Term::init(term::Arg::new().header("Получение списка идентификаторов . . ."))?;
         let start = Instant::now();
-        let ids = get(&arg, Some(|arg: CallbackArg| -> Result<()> {
+        let ids = get(&mut auth, arg, Some(|arg: CallbackArg| -> Result<()> {
             term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
                 arrange_millis::get(arg.elapsed_millis), 
                 arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 

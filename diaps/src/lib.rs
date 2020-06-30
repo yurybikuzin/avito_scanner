@@ -16,6 +16,7 @@ extern crate serde;
 // ============================================================================
 
 /// Аргумент для fn get
+#[derive(Clone)]
 pub struct Arg<'a> {
     /// params - непустая строка параметров, например: "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private"
     pub params: &'a str, 
@@ -115,14 +116,14 @@ pub struct CallbackArg {
 /// Возвращает ошибки, если возникли проблемы при соединении с сервером, преобразовании ответа в
 /// json, извлечении значений result.count и result.lastStamp
 pub async fn get<'a, Cb>(
-    auth: &'a str, 
-    arg: &Arg<'a>,
+    auth: &mut auth::Lazy,
+    arg: Arg<'a>,
     mut callback: Option<Cb>,
 ) -> Result<Ret> 
 where 
     Cb: FnMut(CallbackArg) -> Result<()>,
 {
-    let Arg {params, count_limit, price_precision, price_max_inc} = *arg;
+    let Arg {params, count_limit, price_precision, price_max_inc} = arg;
 
     let start = Instant::now();
 
@@ -140,7 +141,7 @@ where
         while need_continue(count, price_max_delta, count_limit, price_precision) {
             let url = format!(
                 "https://avito.ru/api/9/items?key={}&{}&display=list&page=1&limit=1{}{}{}",
-                auth,
+                auth.key().await?,
                 params,         
                 match price_min { None => "".to_owned(), Some(price_min) => format!("&priceMin={}", price_min) },
                 match price_max { None => "".to_owned(), Some(price_max) => format!("&priceMax={}", price_max) },
@@ -337,10 +338,10 @@ mod tests {
             price_max_inc,
         };
 
-        let mut term = Term::init(&term::Arg::new().header("Определение диапазонов цен . . ."))?;
+        let mut term = Term::init(term::Arg::new().header("Определение диапазонов цен . . ."))?;
         let start = Instant::now();
-        let auth = auth::get(Some(auth::Arg::new())).await?;
-        let ret = get(&auth, &arg, Some(|arg: CallbackArg| -> Result<()> {
+        let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
+        let ret = get(&mut auth, arg, Some(|arg: CallbackArg| -> Result<()> {
             term.output(format!("count_total: {}, checks_total: {}, elapsed_millis: {}, per_millis: {}, detected_diaps: {}, price: {}..{}/{}, count: {}", 
                 arg.count_total,
                 arg.checks_total,

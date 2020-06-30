@@ -18,6 +18,7 @@ http = "0.2.1"
 serde_json = "1.0.55"
 
 diaps = { path = "../diaps" }
+auth = { path = "../auth" }
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
@@ -26,7 +27,6 @@ env_logger = "0.7.1"
 # ansi-escapes = "0.1"
 crossterm = "0.17.5"
 
-auth = { path = "../auth" }
 arrange_millis = { path = "../arrange_millis" }
 env = { path = "../env" }
 term = { path = "../term" }
