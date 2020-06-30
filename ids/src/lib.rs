@@ -30,7 +30,6 @@ where
     F: Future<Output=Result<String>>
 {
     pub get_auth: fn() -> F, // https://stackoverflow.com/questions/58173711/how-can-i-store-an-async-function-in-a-struct-and-call-it-from-a-struct-instance
-    // pub auth: &'a str,
     pub params: &'a str,
     pub diaps_ret: &'a diaps::Ret, 
     pub items_per_page: usize,
@@ -449,7 +448,8 @@ mod tests {
         let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
 
         let arg = Arg {
-            get_auth,
+            get_auth: || auth::get(Some(auth::Arg::new())),
+            // get_auth,
             params: &params,
             diaps_ret: &diaps_ret, 
             thread_limit_network,
@@ -461,13 +461,16 @@ mod tests {
         Ok(())
     }
 
+    use term::Term;
+
     async fn helper<'a, F>(arg: &Arg<'a, F>) -> Result<()> 
         where F: Future<Output=Result<String>>,
     {
 
-        let mut term = Term::init("ids::get".to_owned())?;
+        let mut term = Term::init(&term::Arg::new().header("Получение списка идентификаторов . . ."))?;
+        let start = Instant::now();
         let ids = get(&arg, Some(|arg: CallbackArg| -> Result<()> {
-            term.output(format!("ids::get: time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
+            term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
                 arrange_millis::get(arg.elapsed_millis), 
                 arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
                 arrange_millis::get(arg.remained_millis), 
@@ -478,16 +481,8 @@ mod tests {
                 arg.ids_len,
             ))
         })).await?;
-        println!("ids_len: {}", ids.len());
+        println!("{}, Список идентификаторов получен: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ids.len());
         Ok(())
-    }
-
-    async fn get_auth() -> Result<String> {
-        println!("Получение токена авторизации . . .");
-        let start = Instant::now();
-        let auth = auth::get().await?;
-        println!("Токен авторизации получен, {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()));
-        Ok(auth)
     }
 
 }

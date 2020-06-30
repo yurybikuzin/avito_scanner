@@ -121,6 +121,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde_json",
+ "term",
  "tokio",
  "url",
 ]
@@ -229,6 +230,7 @@ name = "diaps"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrange_millis",
  "auth",
  "env",
  "env_logger",
@@ -236,6 +238,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "term",
  "tokio",
  "url",
 ]
@@ -571,7 +574,6 @@ dependencies = [
 name = "ids"
 version = "0.1.0"
 dependencies = [
- "ansi-escapes",
  "anyhow",
  "arrange_millis",
  "auth",
@@ -584,6 +586,7 @@ dependencies = [
  "log",
  "reqwest",
  "serde_json",
+ "term",
  "tokio",
  "url",
 ]
@@ -1104,6 +1107,7 @@ dependencies = [
  "id_store",
  "ids",
  "log",
+ "term",
  "tokio",
 ]
 

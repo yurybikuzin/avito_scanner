@@ -94,17 +94,22 @@ pub struct CallbackArg {
     pub per_millis: u128,
 }
 
-pub type Ret = ();
+pub struct Ret {
+    pub received_qt: usize,
+}
 
-pub async fn fetch_and_save<'a, F: Future<Output=Result<String>>>(
+pub async fn fetch_and_save<'a, F, Cb>(
     arg: &Arg<'a, F>, 
-    callback: Option<&dyn Fn(CallbackArg)>,
-) -> Result<Ret> {
+    mut callback: Option<Cb>,
+) -> Result<Ret>
+where 
+    F: Future<Output=Result<String>>,
+    Cb: FnMut(CallbackArg) -> Result<()>,
+{
     let now = Instant::now();
 
     let mut ids_non_existent: Vec<u64> = Vec::new();
     let mut ids_non_existent_i = 0;
-
 
     let mut id_i = 0;
     let ids_len = arg.ids.len();
@@ -119,6 +124,7 @@ pub async fn fetch_and_save<'a, F: Future<Output=Result<String>>>(
     }
     let mut used_network_threads = 0;
 
+    let mut received_qt = 0;
     let mut elapsed_qt = 0;
     let mut remained_qt = 0;
     let mut last_callback = Instant::now();
@@ -138,7 +144,7 @@ pub async fn fetch_and_save<'a, F: Future<Output=Result<String>>>(
                                         start_fetch = Some(Instant::now());
                                     }
                                     ids_non_existent.push(id);
-                                    if let Some(callback) = callback {
+                                    callback = if let Some(mut callback) = callback {
                                         remained_qt += 1;
                                         if let Some(start_fetch) = start_fetch {
                                             if elapsed_qt > 0 && Instant::now().duration_since(last_callback).as_millis() > 100 {
@@ -151,11 +157,14 @@ pub async fn fetch_and_save<'a, F: Future<Output=Result<String>>>(
                                                     elapsed_millis, 
                                                     remained_millis, 
                                                     per_millis,
-                                                });
+                                                })?;
                                                 last_callback = Instant::now();
                                             }
                                         }
-                                    }
+                                        Some(callback)
+                                    } else {
+                                        None
+                                    };
                                     if used_network_threads < arg.thread_limit_network {
                                         let client = reqwest::Client::new();
                                         push_fut_fetch!(fut_queue, client, auth, arg, ids_non_existent, ids_non_existent_i);
@@ -170,7 +179,7 @@ pub async fn fetch_and_save<'a, F: Future<Output=Result<String>>>(
                             },
                             OpRet::Save(_) => {},
                             OpRet::Fetch(ret) => {
-                                if let Some(callback) = callback {
+                                callback = if let Some(mut callback) = callback {
                                     elapsed_qt += 1;
                                     if remained_qt > 0 {
                                         remained_qt -= 1;
@@ -186,12 +195,16 @@ pub async fn fetch_and_save<'a, F: Future<Output=Result<String>>>(
                                                 elapsed_millis, 
                                                 remained_millis, 
                                                 per_millis,
-                                            });
+                                            })?;
                                             last_callback = Instant::now();
                                         }
                                     }
-                                }
+                                    Some(callback)
+                                } else {
+                                    None
+                                };
                                 if let Some(json) = ret.json {
+                                    received_qt += 1;
                                     push_fut_save!(fut_queue, json, ret.id, arg.out_dir);
                                 }
                                 if ids_non_existent_i < ids_non_existent.len() {
@@ -214,7 +227,7 @@ pub async fn fetch_and_save<'a, F: Future<Output=Result<String>>>(
         arrange_millis::get(Instant::now().duration_since(now).as_millis()), 
     );
     
-    Ok(())
+    Ok(Ret{received_qt})
 }
 
 enum OpArg<'a> {

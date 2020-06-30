@@ -73,6 +73,20 @@ pub struct Diap {
 
 // ============================================================================
 
+pub struct CallbackArg {
+    pub count_total: u64,
+    pub checks_total: usize,
+    pub elapsed_millis: u128,
+    pub per_millis: u128,
+    pub diaps_detected: usize,
+    pub price_min: Option<isize>,
+    pub price_max: Option<isize>,
+    pub price_max_delta: Option<isize>,
+    pub count: Option<u64>,
+}
+
+// ============================================================================
+
 /// Возвращает список диапазон цен, каждый из которых содержит близкое к arg.count_limit объявлений, но
 /// не больше
 ///
@@ -100,10 +114,17 @@ pub struct Diap {
 ///
 /// Возвращает ошибки, если возникли проблемы при соединении с сервером, преобразовании ответа в
 /// json, извлечении значений result.count и result.lastStamp
-pub async fn get<'a>(auth: &'a str, arg: &Arg<'a>) -> Result<Ret> {
+pub async fn get<'a, Cb>(
+    auth: &'a str, 
+    arg: &Arg<'a>,
+    mut callback: Option<Cb>,
+) -> Result<Ret> 
+where 
+    Cb: FnMut(CallbackArg) -> Result<()>,
+{
     let Arg {params, count_limit, price_precision, price_max_inc} = *arg;
 
-    let now = Instant::now();
+    let start = Instant::now();
 
     let mut price_min: Option<isize> = None;
     let mut price_max: Option<isize> = None;
@@ -113,6 +134,7 @@ pub async fn get<'a>(auth: &'a str, arg: &Arg<'a>) -> Result<Ret> {
     let mut last_stamp: Option<u64> = None;
     let mut checks_total: usize = 0;
     let client = reqwest::Client::new();
+    let mut count_total: Option<u64> = None;
     loop {
         let mut checks: usize = 0;
         while need_continue(count, price_max_delta, count_limit, price_precision) {
@@ -148,6 +170,28 @@ pub async fn get<'a>(auth: &'a str, arg: &Arg<'a>) -> Result<Ret> {
                 val @ _ => bail!("result.count expected to be a Number, not {:?}", val),
             };
             count = Some(count_src);
+            if count_total.is_none() {
+                count_total = count;
+            }
+
+            callback = if let Some(mut callback) = callback {
+                let elapsed_millis = Instant::now().duration_since(start).as_millis();
+                let per_millis = elapsed_millis / checks_total as u128;
+                callback(CallbackArg {
+                    count_total: count_total.unwrap(),
+                    checks_total,
+                    elapsed_millis,
+                    per_millis,
+                    diaps_detected: diaps.len(),
+                    count,
+                    price_min,
+                    price_max,
+                    price_max_delta,
+                })?;
+                Some(callback)
+            } else {
+                None
+            };
 
             trace!("count: {:?}", count);
             if let Some(count) = count {
@@ -212,7 +256,7 @@ pub async fn get<'a>(auth: &'a str, arg: &Arg<'a>) -> Result<Ret> {
     }
 
     info!("{} ms, diaps::get: checks_total: {}, diaps.len: {}", 
-        Instant::now().duration_since(now).as_millis(),
+        Instant::now().duration_since(start).as_millis(),
         checks_total, 
         diaps.len(),
     );
@@ -275,6 +319,8 @@ mod tests {
     const PRICE_PRECISION: isize = 20000;
     const PRICE_MAX_INC: isize = 1000000;
 
+    use term::Term;
+
     #[tokio::test]
     async fn it_works() -> Result<()> {
         init();
@@ -291,8 +337,23 @@ mod tests {
             price_max_inc,
         };
 
-        let auth = auth::get().await?;
-        let ret = get(&auth, &arg).await?;
+        let mut term = Term::init(&term::Arg::new().header("Определение диапазонов цен . . ."))?;
+        let start = Instant::now();
+        let auth = auth::get(Some(auth::Arg::new())).await?;
+        let ret = get(&auth, &arg, Some(|arg: CallbackArg| -> Result<()> {
+            term.output(format!("count_total: {}, checks_total: {}, elapsed_millis: {}, per_millis: {}, detected_diaps: {}, price: {}..{}/{}, count: {}", 
+                arg.count_total,
+                arg.checks_total,
+                arrange_millis::get(arg.elapsed_millis),
+                arrange_millis::get(arg.per_millis),
+                arg.diaps_detected,
+                if arg.price_min.is_none() { "".to_owned() } else { arg.price_min.unwrap().to_string() },
+                if arg.price_max.is_none() { "".to_owned() } else { arg.price_max.unwrap().to_string() },
+                if arg.price_max_delta.is_none() { "".to_owned() } else { arg.price_max_delta.unwrap().to_string() },
+                if arg.count.is_none() { "".to_owned() } else { arg.count.unwrap().to_string() },
+            ))
+        })).await?;
+        println!("{}, Определены диапазоны цен: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.diaps.len());
 
         info!("ret:{}", serde_json::to_string_pretty(&ret).unwrap());
 

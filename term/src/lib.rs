@@ -21,10 +21,44 @@ pub struct Term {
     anchors: TermAnchors,
 }
 
+pub struct Arg {
+    header: Option<String>,
+    is_merged_header: bool,
+}
+
+impl Arg {
+    pub fn new() -> Self {
+        Self {
+            header: None,
+            is_merged_header: false,
+        }
+    }
+    pub fn header<'a, S: AsRef<str>>(self, s: S) -> Self {
+        Self {
+            header: Some(s.as_ref().to_owned()),
+            is_merged_header: self.is_merged_header,
+        }
+    }
+    pub fn merge(self) -> Self {
+        Self {
+            header: self.header,
+            is_merged_header: true,
+        }
+    }
+}
+
 impl Term {
-    pub fn init(s: String) -> Result<Self> {
+    pub fn init(arg: &Arg) -> Result<Self> {
         let mut stdout = TermStdout::new();
-        let anchors = stdout.output(s)?;
+        let anchors = stdout.output(arg.header.as_deref())?;
+        let anchors = if arg.is_merged_header {
+            anchors
+        } else {
+            TermAnchors {
+                row_prev: anchors.row_last,
+                row_last: anchors.row_last,
+            }
+        };
         Ok(Self {
             stdout,
             anchors,
@@ -32,7 +66,7 @@ impl Term {
     }
     pub fn output(&mut self, s: String) -> Result<()> {
         self.stdout.restore_cursor(&self.anchors)?;
-        self.anchors = self.stdout.output(s)?;
+        self.anchors = self.stdout.output(Some(s.as_str()))?;
         Ok(())
     }
 }
@@ -56,20 +90,27 @@ impl TermStdout {
             stdout: stdout()
         }
     }
-    fn output(&mut self, s: String) -> Result<TermAnchors> {
+    fn output(&mut self, s: Option<&str>) -> Result<TermAnchors> {
         let mut row_prev = crossterm::cursor::position()?.1;
-        let rows = crossterm::terminal::size()?.1;
+        let (cols, rows) = crossterm::terminal::size()?;
+        let mut lines = 2;
+        if let Some(s) = &s {
+            let s_len = s.len() as u16;
+            lines += s_len / cols + (if s_len % cols == 0 { 0 } else { 1 });
+        }
         if row_prev == rows - 1 {
-            row_prev -= 2;
+            row_prev -= lines;
             queue!(self.stdout, 
-                terminal::ScrollUp(2),
+                terminal::ScrollUp(lines),
                 cursor::MoveTo(0, row_prev),
             )?;
         }
-        queue!(self.stdout,
-            Print(s),
-            Print("\n".to_owned())
-        )?;
+        if let Some(s) = s {
+            queue!(self.stdout,
+                Print(s),
+                Print("\n".to_owned())
+            )?;
+        }
         self.stdout.flush()?;
         let row_last = crossterm::cursor::position()?.1;
         Ok(TermAnchors {row_prev, row_last})
@@ -78,7 +119,8 @@ impl TermStdout {
         let (col_new, row_new) = crossterm::cursor::position()?;
         if row_new == anchors.row_last && col_new == 0 {
             queue!(self.stdout,
-                cursor::MoveTo(0, anchors.row_prev)
+                cursor::MoveTo(0, anchors.row_prev),
+                terminal::Clear(terminal::ClearType::FromCursorDown)
             )?;
         }
         Ok(())
@@ -102,7 +144,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_works() -> Result<()> {
+    async fn test_no_merge() -> Result<()> {
         init();
 
         let arg = Arg { 
@@ -110,9 +152,38 @@ mod tests {
             warn_chance_treshold: 1,
             info_chance_treshold: 3,
         };
-        let mut term = Term::init("ids::get".to_owned())?;
+        let mut term = Term::init(
+            &super::Arg::new().header("long_live . . .")
+        )?;
         long_live(&arg, Some(|arg: CallbackArg| -> Result<()> {
-            term.output(format!("ids::get: time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
+            term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
+                arrange_millis::get(arg.elapsed_millis), 
+                arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
+                arrange_millis::get(arg.remained_millis), 
+                arrange_millis::get(arg.per_millis), 
+                arg.elapsed_qt,
+                arg.elapsed_qt + arg.remained_qt,
+                arg.remained_qt,
+            ))
+        })).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_merge() -> Result<()> {
+        init();
+
+        let arg = Arg { 
+            qt: 1000,
+            warn_chance_treshold: 1,
+            info_chance_treshold: 3,
+        };
+        let mut term = Term::init(
+            &super::Arg::new().header("long_live . . .").merge()
+        )?;
+        long_live(&arg, Some(|arg: CallbackArg| -> Result<()> {
+            term.output(format!("long_live: time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
                 arrange_millis::get(arg.elapsed_millis), 
                 arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
                 arrange_millis::get(arg.remained_millis), 

@@ -40,6 +40,8 @@ async fn test_check() -> Result<()> {
     Ok(())
 }
 
+use term::Term;
+
 #[tokio::test]
 async fn test_fetch_and_save() -> Result<()> {
     init();
@@ -67,7 +69,8 @@ async fn test_fetch_and_save() -> Result<()> {
     }
     let out_dir = &Path::new("out_test");
     let arg = Arg {
-        get_auth,
+        // get_auth: || auth::get(Some(auth::Arg::new())),
+        get_auth: || auth::get(Some(auth::Arg::new())),
         ids: &ids,
         out_dir,
         thread_limit_network: 1,
@@ -75,12 +78,10 @@ async fn test_fetch_and_save() -> Result<()> {
         retry_count: 3,
     };
 
-    let now = Instant::now();
-    let cmd = ansi_escapes::CursorShow;
-    println!("cards::fetch_and_save");
-    fetch_and_save(&arg, Some(&|arg: CallbackArg| {
-        println!("{}ids::get: time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
-            cmd,
+    let mut term = Term::init(&term::Arg::new().header("Получение объявлений . . ."))?;
+    let start = Instant::now();
+    let ret = fetch_and_save(&arg, Some(|arg: CallbackArg| -> Result<()> {
+        term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
             arrange_millis::get(arg.elapsed_millis), 
             arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
             arrange_millis::get(arg.remained_millis), 
@@ -88,23 +89,22 @@ async fn test_fetch_and_save() -> Result<()> {
             arg.elapsed_qt,
             arg.elapsed_qt + arg.remained_qt,
             arg.remained_qt,
-        );
+        ))
     })).await?;
-    println!("{}", cmd);
-    info!("{}, cards::fetch_and_save", arrange_millis::get(Instant::now().duration_since(now).as_millis()));
-
-    let now = Instant::now();
-    info!("cards::fetch_and_save again");
-    fetch_and_save(&arg, None).await?;
-    info!("{}, cards::fetch_and_save", arrange_millis::get(Instant::now().duration_since(now).as_millis()));
+    println!("{}, Объявления получены: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
+    //
+    // let start = Instant::now();
+    // let mut term = Term::init(&term::Arg::new().header("Получение объявлений (2). . ."))?;
+    // let ret = fetch_and_save(&arg, None).await?;
+    // println!("{}, Объявления получены: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
 
     Ok(())
 }
 
-async fn get_auth() -> Result<String> {
-    println!("Получение токена авторизации . . .");
-    let start = Instant::now();
-    let auth = auth::get().await?;
-    println!("ТОкен авторизации получен, {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()));
-    Ok(auth)
-}
+// async fn get_auth() -> Result<String> {
+//     // println!("Получение токена авторизации . . .");
+//     // let start = Instant::now();
+//     let auth = auth::get(Some(auth::Arg::new())).await?;
+//     // println!("ТОкен авторизации получен, {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()));
+//     // Ok(auth)
+// }

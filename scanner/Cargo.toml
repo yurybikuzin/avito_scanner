@@ -23,6 +23,7 @@ ids = { path = "../ids" }
 id_store = { path = "../id_store" }
 arrange_millis = { path = "../arrange_millis" }
 cards = { path = "../cards" }
+term = { path = "../term" }
 
 # url = "2.1.1"
 # reqwest = { version = "0.10.6", features = ["json"] }
