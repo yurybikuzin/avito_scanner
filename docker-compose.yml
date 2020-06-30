@@ -4,7 +4,7 @@ services:
 
     proj:
         container_name: ${BW_PROJ_NAME}-proj
-        image: bazawinner/dev-${BW_PROJ_NAME}-proj:${BW_PROJ_VERSION}
+        image: bazawinner/dev-${BW_PROJ_NAME}-proj:${BW_DEV_PROJ_VERSION}
         entrypoint: ["docker-entrypoint.sh"]
         working_dir: /proj
         tty: true
@@ -14,13 +14,13 @@ services:
 
             - BW_PROJ_NAME
         volumes:
-            - ./docker/proj/sh:/sh
+            - ./dev/proj/sh:/sh
             - .:/proj
             - ./registry:/usr/local/cargo/registry
 
     auth:
         container_name: ${BW_PROJ_NAME}-auth
-        image: bazawinner/dev-${BW_PROJ_NAME}-auth:${BW_AUTH_VERSION}
+        image: bazawinner/dev-${BW_PROJ_NAME}-auth:${BW_DEV_AUTH_VERSION}
         entrypoint: ["docker-entrypoint.sh"]
         tty: true
         environment:
@@ -30,8 +30,8 @@ services:
             - BW_PROJ_NAME
             - BW_AUTH_PORT
         volumes:
-            - ./docker/auth/sh:/sh
-            - ./docker/auth/src:/proj/src
-            - ./docker/auth/out:/proj/out
+            - ./dev/auth/sh:/sh
+            - ./dev/auth/src:/proj/src
+            - ./dev/auth/out:/proj/out
         ports:
             - $BW_AUTH_PORT:3000

@@ -1,4 +1,4 @@
-#!/usr/local/bin/dumb-init /bin/bash
+#!/usr/bin/dumb-init bash
 set -e
 echo "Иницализация контейнера '$BW_PROJ_NAME-proj'. . ."
 
@@ -8,4 +8,4 @@ cat <<USAGE
 Нажмите CTRL+C
 USAGE
 
-exec dumb-init -- /bin/bash
+exec dumb-init -- bash
