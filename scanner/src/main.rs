@@ -34,27 +34,6 @@ use term::Term;
 async fn main() -> Result<()> {
     env_logger::init();
 
-    // // let re = regex::Regex::new(r"My Public IPv4 is: <[^>]+>([^<]+)").unwrap();
-    // let re = regex::Regex::new(r#""ipv4":\{"value":"([^"]+)"#).unwrap();
-    //
-    // let url = format!("https://yandex.ru/internet/");
-    // let url = Url::parse(&url)?;
-    // // let client = reqwest::Client::new();
-    // //
-    // // let proxy_http_url = env::get("PROXY_HTTP_URL")?;
-    // // let proxy_https_url = env::get("PROXY_HTTPS_URL")?;
-    // let client = reqwest::Client::builder()
-    //     // .proxy(reqwest::Proxy::http("http://91.235.33.79")?)
-    //     .proxy(reqwest::Proxy::all("https://91.235.33.91")?)
-    //     // .proxy(reqwest::Proxy::https("https://169.57.1.85")?)
-    //     .build()?
-    // ;
-    // let text = client.get(url).send().await?.text().await?;
-    // match re.captures(&text) {
-    //     None => info!("ip not found"),
-    //     Some(cap) => info!("ip: {}", &cap[1]),
-    // }
-
     let params = env::get("AVITO_PARAMS", PARAMS.to_owned())?;
     let id_store_file_spec= &Path::new(ID_STORE_FILE_SPEC);
     let id_fresh_duration: usize = env::get("AVITO_ID_FRESH_DURATION", ID_FRESH_DURATION)?;

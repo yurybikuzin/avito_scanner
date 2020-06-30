@@ -10,5 +10,6 @@ members = [
     "id_store", 
     "cards", 
     "scanner", 
-    "proxy_checker" 
+    "proxy_checker",
 ]
+
