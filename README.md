@@ -76,6 +76,7 @@ cd avito
 
 ```
 AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir docker-compose -f simple-prod-docker-compose.yml up -d
+
 docker exec -it prod-avito-proj scan
 ```
 
@@ -93,6 +94,7 @@ docker-compose -f simple-prod-docker-compose.yml down
 
 ```
 docker-compose -f full-prod-docker-compose.yml up -d
+
 docker exec -it prod-avito-proj scan
 ```
 
