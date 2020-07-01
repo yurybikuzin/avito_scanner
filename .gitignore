@@ -1,5 +1,6 @@
 *.swp
 *.swo
-target/
-registry/
+cargo-git/
+cargo-target/
+cargo-registry/
 

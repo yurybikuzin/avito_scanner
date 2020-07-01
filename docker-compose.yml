@@ -6,17 +6,22 @@ services:
         container_name: ${BW_PROJ_NAME}-proj
         image: bazawinner/dev-${BW_PROJ_NAME}-proj:${BW_DEV_PROJ_VERSION}
         entrypoint: ["docker-entrypoint.sh"]
-        working_dir: /proj
+        # entrypoint: ["/bin/bash"]
+        # working_dir: /proj
         tty: true
         environment:
-            - PATH=/sh:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            # - PATH=/sh:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             - TZ=Europe/Moscow
 
             - BW_PROJ_NAME
         volumes:
             - ./dev/proj/sh:/sh
-            - .:/proj
-            - ./registry:/usr/local/cargo/registry
+            - .:/home/rust/src
+            - ./cargo-git/:/home/rust/.cargo/git
+            - ./cargo-registry/:/home/rust/.cargo/registry
+            - ./cargo-target/:/home/rust/src/target
+            # - .:/proj
+            # - ./registry:/usr/local/cargo/registry
 
     auth:
         container_name: ${BW_PROJ_NAME}-auth
@@ -28,10 +33,10 @@ services:
             - TZ=Europe/Moscow
 
             - BW_PROJ_NAME
-            - BW_AUTH_PORT
+            - BW_DEV_AUTH_PORT
         volumes:
             - ./dev/auth/sh:/sh
             - ./dev/auth/src:/proj/src
             - ./dev/auth/out:/proj/out
         ports:
-            - $BW_AUTH_PORT:3000
+            - $BW_DEV_AUTH_PORT:3000

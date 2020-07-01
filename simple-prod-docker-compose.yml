@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+
+    proj:
+        container_name: prod-avito-proj
+        image: bazawinner/prod-avito-proj:0.1.0
+        tty: true
+        environment:
+            - TZ=Europe/Moscow
+            - AVITO_AUTH
+        volumes:
+            - ./out:/proj/out
+

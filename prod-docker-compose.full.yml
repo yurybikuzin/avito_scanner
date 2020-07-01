@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+
+    proj:
+        container_name: prod-${BW_PROJ_NAME}-proj
+        image: bazawinner/prod-${BW_PROJ_NAME}-proj:${BW_PROD_PROJ_VERSION}
+        tty: true
+        environment:
+            - TZ=Europe/Moscow
+        volumes:
+            - ./out:/proj/out
+
+    auth:
+        container_name: prod-${BW_PROJ_NAME}-auth
+        image: bazawinner/prod-${BW_PROJ_NAME}-auth:${BW_PROD_AUTH_VERSION}
+        tty: true
+        environment:
+            - TZ=Europe/Moscow
+        volumes:
+            - ./out:/proj/out
+        ports:
+            - $BW_PROD_AUTH_PORT:3000

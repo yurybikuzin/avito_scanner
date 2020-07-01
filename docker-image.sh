@@ -2,6 +2,8 @@
 
 # Version 2.0.0, 2020-07-01
 
+set -e
+
 cmdname=${0##*/}
 
 echoerr() { 
@@ -101,6 +103,11 @@ fi
 if [[ ! $build_only && $bw_version == $did_version ]]; then
     echoerr "BW_${TARGET}_${SERVICE}_VERSION ($bw_version) in file'.env' must differ (be bigger) than version ($did_version) in file'$version_fspec' in line: $service: $did_version"
     exit 1
+fi
+
+if [[ -e "$target/$service/before.sh" ]]; then
+    env $(cat .env | grep -v '#' | xargs) bash -c $target/$service/before.sh
+    
 fi
 
 env $(cat .env | grep -v '#' | xargs) bash -c '\

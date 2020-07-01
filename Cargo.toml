@@ -1,5 +1,5 @@
 [workspace]
-default-members = [ "scanner", "proxy_checker" ]
+default-members = [ "scan", "proxy_checker" ]
 members = [ 
     "term", 
     "env", 
@@ -9,7 +9,9 @@ members = [
     "ids", 
     "id_store", 
     "cards", 
-    "scanner", 
+    "scan", 
     "proxy_checker",
 ]
+# [targt.x86_64-unknown-linux-musl]
+# linker = "x86_64-linux-musl-gcc"
 
