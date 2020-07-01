@@ -84,6 +84,7 @@ struct TermStdout {
     stdout: std::io::Stdout,
 }
 
+const MARGIN: u16 = 1;
 impl TermStdout {
     fn new() -> Self {
         Self {
@@ -93,17 +94,30 @@ impl TermStdout {
     fn output(&mut self, s: Option<&str>) -> Result<TermAnchors> {
         let mut row_prev = crossterm::cursor::position()?.1;
         let (cols, rows) = crossterm::terminal::size()?;
-        let mut lines = 2;
-        if let Some(s) = &s {
-            let s_len = s.len() as u16;
-            lines += s_len / cols + (if s_len % cols == 0 { 0 } else { 1 });
-        }
-        if row_prev == rows - 1 {
-            row_prev -= lines;
-            queue!(self.stdout, 
-                terminal::ScrollUp(lines),
-                cursor::MoveTo(0, row_prev),
-            )?;
+        if cols > 0 && rows > 0 {
+            let lines = MARGIN + if let Some(s) = &s {
+                let s_len = s.len() as u16;
+                s_len / cols + (if s_len % cols == 0 { 0 } else { 1 })
+            } else {
+                0
+            };
+            // println!("row_prev: {}, rows: {}, lines: {}", row_prev, rows, lines);
+            if row_prev >= rows - 1 - lines {
+                let lines = row_prev - (rows - 1 - lines) ;
+                row_prev -= lines;
+            // println!("row_prev: {}, rows: {}, lines: {}", row_prev, rows, lines);
+                if lines > 0 {
+                    queue!(self.stdout, 
+                        terminal::ScrollUp(lines),
+                    )?;
+                }
+                queue!(self.stdout, 
+                    // terminal::ScrollUp(lines - 1),
+                    cursor::MoveTo(0, row_prev),
+                )?;
+            }
+        // self.stdout.flush()?;
+            // todo!();
         }
         if let Some(s) = s {
             queue!(self.stdout,
@@ -116,8 +130,8 @@ impl TermStdout {
         Ok(TermAnchors {row_prev, row_last})
     }
     fn restore_cursor(&mut self, anchors: &TermAnchors) -> Result<()> {
-        let (col_new, row_new) = crossterm::cursor::position()?;
-        if row_new == anchors.row_last && col_new == 0 {
+        let (col_cur, row_cur) = crossterm::cursor::position()?;
+        if row_cur == anchors.row_last && col_cur == 0 {
             queue!(self.stdout,
                 cursor::MoveTo(0, anchors.row_prev),
                 terminal::Clear(terminal::ClearType::FromCursorDown)
@@ -143,6 +157,7 @@ mod tests {
         INIT.call_once(|| env_logger::init());
     }
 
+    // docker exec -it -e AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir -e RUST_LOG=info avito-proj cargo test -p term test_no_merge
     #[tokio::test]
     async fn test_no_merge() -> Result<()> {
         init();
@@ -155,6 +170,7 @@ mod tests {
         let mut term = Term::init(
             super::Arg::new().header("long_live . . .")
         )?;
+        info!("some info");
         long_live(&arg, Some(|arg: CallbackArg| -> Result<()> {
             term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
                 arrange_millis::get(arg.elapsed_millis), 
@@ -164,12 +180,13 @@ mod tests {
                 arg.elapsed_qt,
                 arg.elapsed_qt + arg.remained_qt,
                 arg.remained_qt,
-            ))
+            ).repeat(4))
         })).await?;
 
         Ok(())
     }
 
+    // docker exec -it -e AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir -e RUST_LOG=info avito-proj cargo test -p term test_merge
     #[tokio::test]
     async fn test_merge() -> Result<()> {
         init();

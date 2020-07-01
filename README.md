@@ -117,7 +117,7 @@ docker-compose up -d
 #### Получение *AVITO_AUTH*
 
 ```
-curl localhost:42001
+curl localhost:42002
 ```
 
 #### cargo check
