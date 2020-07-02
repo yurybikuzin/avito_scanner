@@ -15,6 +15,7 @@ serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "0.2", features = ["fs"] }
 
 cards = { path = "../cards" }
+collect = { path = "../collect" }
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }

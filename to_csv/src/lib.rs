@@ -6,14 +6,13 @@ use anyhow::{anyhow, bail, Result, Error, Context};
 
 use tokio::fs;
 use std::path::Path;
-use cards::Record;
 
 // ============================================================================
 // ============================================================================
 
 pub struct Arg<'a> {
     pub file_path: &'a Path,
-    pub records: &'a Vec<Record>
+    pub records: &'a collect::Records,
 }
 
 pub async fn write<'a>(arg: Arg<'a>) -> Result<()> {
@@ -22,7 +21,7 @@ pub async fn write<'a>(arg: Arg<'a>) -> Result<()> {
     }
     let mut wtr = csv::Writer::from_path(arg.file_path)?;
 
-    for record in arg.records {
+    for record in &arg.records.0 {
         wtr.serialize(record)?;
     }
     wtr.flush()?;

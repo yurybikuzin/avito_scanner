@@ -22,7 +22,7 @@ const ID_STORE_FILE_SPEC: &str = "out/ids.json";
 const ID_FRESH_DURATION: usize = 1440; //30; // minutes
 const PARAMS: &str = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
 const THREAD_LIMIT_NETWORK: usize = 1;
-const THREAD_LIMIT_FILE: usize = 12;
+const THREAD_LIMIT_FILE: usize = 2;
 const ITEMS_PER_PAGE: usize = 50;
 const RETRY_COUNT: usize = 3;
 
@@ -170,9 +170,10 @@ async fn main() -> Result<()> {
         thread_limit_file: 3,
     };
 
-    let mut term = Term::init(term::Arg::new().header("Чтение карточек . . ."))?;
+    let mut term = Term::init(term::Arg::new().header("Чтение объявлений . . ."))?;
     let start = Instant::now();
-    let ret = collect::cards(arg, Some(|arg: collect::CallbackArg| -> Result<()> {
+    let mut records = collect::Records::new();
+    collect::items(arg, &mut records, Some(|arg: collect::CallbackArg| -> Result<()> {
         match arg {
             collect::CallbackArg::ReadDir {elapsed_millis, dir_qt, file_qt} => {
                 term.output(format!("time: {}, dirs: {}, files: {}", 
@@ -194,13 +195,13 @@ async fn main() -> Result<()> {
             },
         }
     })).await?;
-    println!("{}, Карточки прочитаны: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.records.len());
+    println!("{}, Объявления прочитаны: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), records.0.len());
 
     let start = Instant::now();
     let file_path = Path::new("out/records.csv");
     let arg = to_csv::Arg {
         file_path: &file_path,
-        records: &ret.records,
+        records: &records,
     };
     to_csv::write(arg).await?;
     println!("{}, Записаны в файл {:?}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), file_path);

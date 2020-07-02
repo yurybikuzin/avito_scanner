@@ -1427,6 +1427,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cards",
+ "collect",
  "csv",
  "env_logger",
  "log",

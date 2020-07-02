@@ -70,9 +70,40 @@ pub enum CallbackArg {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Ret {
-    pub records: Vec<cards::Record>
+pub trait Ret {
+    fn adopt_record(&mut self, record: cards::Record) -> Result<()>;
+}
+
+pub struct Records (pub Vec::<cards::Record>);
+
+impl Records {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl Ret for Records {
+    fn adopt_record(&mut self, record: cards::Record) -> Result<()> {
+        self.0.push(record);
+        Ok(())
+    }
+}
+
+use std::collections::HashSet;
+pub struct AutoCatalog (pub HashSet<String>);
+impl AutoCatalog {
+    pub fn new() -> Self {
+        Self(HashSet::new())
+    }
+}
+
+impl Ret for AutoCatalog {
+    fn adopt_record(&mut self, record: cards::Record) -> Result<()> {
+        if let Some(url) = record.auto_catalog_url {
+            self.0.insert(url);
+        }
+        Ok(())
+    }
 }
 
 use std::path::PathBuf;
@@ -103,18 +134,17 @@ macro_rules! callback_file {
     };
 }
 
-use serde::{
-    Serialize, 
-    Deserialize,
-};
-
 const CALLBACK_THROTTLE: u128 = 100; //ms
-pub async fn cards<'a, Cb>(
+
+pub async fn items<'a, Cb, R>(
     arg: Arg<'a>, 
+    items: &mut R,
     mut callback: Option<Cb>,
-) -> Result<Ret>
+// ) -> Result<R>
+) -> Result<()>
 where 
     Cb: FnMut(CallbackArg) -> Result<()>,
+    R: Ret,
 {
     let mut vec_dir: Vec<PathBuf> = vec![arg.out_dir.to_owned()];
     let mut i_dir = 0;
@@ -133,7 +163,6 @@ where
     let mut start_file: Option<Instant> = None; 
     let start_dir = Instant::now(); 
 
-    let mut records = Vec::<cards::Record>::new();
     loop {
         select! {
             ret = fut_queue.select_next_some() => {
@@ -146,7 +175,7 @@ where
                             OpRet::ReadFile(ret) => {
                                 used_file_threads -= 1;
                                 if let cards::Card::Record(record) = ret {
-                                    records.push(record)
+                                    items.adopt_record(record)?;
                                 }
 
                                 callback = if let Some(mut callback) = callback {
@@ -235,7 +264,7 @@ where
         }
     }
 
-    Ok(Ret{records})
+    Ok(())
 }
 
 enum OpArg {
@@ -280,7 +309,7 @@ mod tests {
     use term::Term;
 
     #[tokio::test]
-    async fn test_collect() -> Result<()> {
+    async fn test_collect_records() -> Result<()> {
         init();
 
         let arg = Arg { 
@@ -290,7 +319,8 @@ mod tests {
 
         let mut term = Term::init(term::Arg::new().header("Чтение карточек . . ."))?;
         let start = Instant::now();
-        let ret = cards(arg, Some(|arg: CallbackArg| -> Result<()> {
+        let mut records = Records::new();
+        items(arg, &mut records, Some(|arg: CallbackArg| -> Result<()> {
             match arg {
                 CallbackArg::ReadDir {elapsed_millis, dir_qt, file_qt} => {
                     term.output(format!("time: {}, dirs: {}, files: {}", 
@@ -312,25 +342,56 @@ mod tests {
                 },
             }
         })).await?;
-        println!("{}, Карточки прочитаны: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.records.len());
+        println!("{}, Карточки прочитаны: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), records.0.len());
 
-        let file_path = Path::new("out_test/some.csv");
-        let arg = to_csv::Arg {
-            records: &ret.records,
-            file_path: &file_path,
-        };
-        to_csv::write(arg).await?;
-
-        // if let Some(dir_path) = file_path.parent() {
-        //     fs::create_dir_all(dir_path).await?;
-        // }
-        // let mut wtr = csv::Writer::from_path("out_test/some.csv")?;
+        // let file_path = Path::new("out_test/some.csv");
+        // let arg = to_csv::Arg {
+        //     records: &records,
+        //     file_path: &file_path,
+        // };
+        // to_csv::write(arg).await?;
         //
-        // for record in ret.records {
-        //     wtr.serialize(record)?;
-        // }
-        // wtr.flush()?;
-        println!("{}, Записаны в файл {:?}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), file_path);
+        // println!("{}, Записаны в файл {:?}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), file_path);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_collect_auto_catalog() -> Result<()> {
+        init();
+
+        let arg = Arg { 
+            out_dir: Path::new("../out"),
+            thread_limit_file: 2,
+        };
+
+        let mut term = Term::init(term::Arg::new().header("Чтение карточек . . ."))?;
+        let start = Instant::now();
+        let mut auto_catalog = AutoCatalog::new();
+        items(arg, &mut auto_catalog, Some(|arg: CallbackArg| -> Result<()> {
+            match arg {
+                CallbackArg::ReadDir {elapsed_millis, dir_qt, file_qt} => {
+                    term.output(format!("time: {}, dirs: {}, files: {}", 
+                        arrange_millis::get(elapsed_millis), 
+                        dir_qt,
+                        file_qt,
+                    ))
+                },
+                CallbackArg::ReadFile {elapsed_millis, remained_millis, per100_millis, elapsed_qt, remained_qt} => {
+                    term.output(format!("time: {}/{}-{}, per100: {}, qt: {}/{}-{}", 
+                        arrange_millis::get(elapsed_millis), 
+                        arrange_millis::get(elapsed_millis + remained_millis), 
+                        arrange_millis::get(remained_millis), 
+                        arrange_millis::get(per100_millis), 
+                        elapsed_qt,
+                        elapsed_qt + remained_qt,
+                        remained_qt,
+                    ))
+                },
+            }
+        })).await?;
+        println!("{}, Обнаружены ссылки на auto_catalog: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), auto_catalog.0.len());
+        println!("{:?}", auto_catalog.0.iter().map(|s| s.as_str()).take(5).collect::<Vec<&str>>());
 
         Ok(())
     }
