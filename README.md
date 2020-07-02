@@ -77,7 +77,7 @@ cd avito
 ```
 AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir docker-compose -f simple-prod-docker-compose.yml up -d
 
-docker exec -it prod-avito-proj scan
+docker exec -it -e RUST_LOG=warn prod-avito-proj scan
 ```
 
 Результат работы программы будет помещен в папку `out`

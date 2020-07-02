@@ -165,5 +165,45 @@ async fn main() -> Result<()> {
     })).await?;
     println!("{}, Объявления получены: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
 
+    let arg = collect::Arg { 
+        out_dir: Path::new("out"),
+        thread_limit_file: 3,
+    };
+
+    let mut term = Term::init(term::Arg::new().header("Чтение карточек . . ."))?;
+    let start = Instant::now();
+    let ret = collect::cards(arg, Some(|arg: collect::CallbackArg| -> Result<()> {
+        match arg {
+            collect::CallbackArg::ReadDir {elapsed_millis, dir_qt, file_qt} => {
+                term.output(format!("time: {}, dirs: {}, files: {}", 
+                    arrange_millis::get(elapsed_millis), 
+                    dir_qt,
+                    file_qt,
+                ))
+            },
+            collect::CallbackArg::ReadFile {elapsed_millis, remained_millis, per100_millis, elapsed_qt, remained_qt} => {
+                term.output(format!("time: {}/{}-{}, per100: {}, qt: {}/{}-{}", 
+                    arrange_millis::get(elapsed_millis), 
+                    arrange_millis::get(elapsed_millis + remained_millis), 
+                    arrange_millis::get(remained_millis), 
+                    arrange_millis::get(per100_millis), 
+                    elapsed_qt,
+                    elapsed_qt + remained_qt,
+                    remained_qt,
+                ))
+            },
+        }
+    })).await?;
+    println!("{}, Карточки прочитаны: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.records.len());
+
+    let start = Instant::now();
+    let file_path = Path::new("out/records.csv");
+    let arg = to_csv::Arg {
+        file_path: &file_path,
+        records: &ret.records,
+    };
+    to_csv::write(arg).await?;
+    println!("{}, Записаны в файл {:?}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), file_path);
+
     Ok(())
 }

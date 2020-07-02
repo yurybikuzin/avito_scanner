@@ -18,10 +18,13 @@ use futures::{
     },
 };
 
+mod card;
 mod file_spec;
 mod check;
 mod save;
 mod fetch;
+
+pub use card::{Card, Record};
 
 // ============================================================================
 // ============================================================================
@@ -50,10 +53,10 @@ macro_rules! push_fut_fetch {
 }
 
 macro_rules! push_fut_save {
-    ($fut_queue: expr, $json: expr, $id: expr, $out_dir: expr) => {
+    ($fut_queue: expr, $card: expr, $id: expr, $out_dir: expr) => {
         let arg = OpArg::Save (save::Arg {
             id: $id,
-            json: $json,
+            card: $card,
             out_dir: $out_dir
         });
         let fut = op(arg);
@@ -72,6 +75,21 @@ macro_rules! push_fut_check {
     };
 }
 
+macro_rules! callback {
+    ($callback: expr, $start: expr, $elapsed_qt: expr, $remained_qt: expr) => {
+        let elapsed_millis = Instant::now().duration_since($start).as_millis(); 
+        let per_millis = elapsed_millis / $elapsed_qt as u128;
+        let remained_millis = per_millis * $remained_qt as u128;
+        $callback(CallbackArg {
+            elapsed_qt: $elapsed_qt,
+            remained_qt: $remained_qt,
+            elapsed_millis, 
+            remained_millis, 
+            per_millis,
+        })?;
+    };
+}
+
 pub struct CallbackArg {
     pub elapsed_qt: usize,
     pub remained_qt: usize,
@@ -84,6 +102,7 @@ pub struct Ret {
     pub received_qt: usize,
 }
 
+const CALLBACK_THROTTLE: u128 = 100;
 pub async fn fetch_and_save<'a, Cb>(
     auth: &mut auth::Lazy,
     arg: Arg<'a>, 
@@ -92,8 +111,6 @@ pub async fn fetch_and_save<'a, Cb>(
 where 
     Cb: FnMut(CallbackArg) -> Result<()>,
 {
-    let now = Instant::now();
-
     let mut ids_non_existent: Vec<u64> = Vec::new();
     let mut ids_non_existent_i = 0;
 
@@ -113,7 +130,7 @@ where
     let mut elapsed_qt = 0;
     let mut remained_qt = 0;
     let mut last_callback = Instant::now();
-    let mut start_fetch: Option<Instant> = None; 
+    let mut start: Option<Instant> = None; 
     loop {
         select! {
             ret = fut_queue.select_next_some() => {
@@ -123,26 +140,18 @@ where
                     },
                     Ok(ret) => {
                         match ret {
+                            OpRet::Save(_) => {},
                             OpRet::Check(check::Ret{id}) => {
                                 if let Some(id) = id {
                                     if ids_non_existent.len() == 0 {
-                                        start_fetch = Some(Instant::now());
+                                        start = Some(Instant::now());
                                     }
                                     ids_non_existent.push(id);
                                     callback = if let Some(mut callback) = callback {
                                         remained_qt += 1;
-                                        if let Some(start_fetch) = start_fetch {
-                                            if elapsed_qt > 0 && Instant::now().duration_since(last_callback).as_millis() > 100 {
-                                                let elapsed_millis = Instant::now().duration_since(start_fetch).as_millis(); 
-                                                let per_millis = elapsed_millis / elapsed_qt as u128;
-                                                let remained_millis = per_millis * remained_qt as u128;
-                                                callback(CallbackArg {
-                                                    elapsed_qt,
-                                                    remained_qt,
-                                                    elapsed_millis, 
-                                                    remained_millis, 
-                                                    per_millis,
-                                                })?;
+                                        if let Some(start) = start {
+                                            if elapsed_qt > 0 && Instant::now().duration_since(last_callback).as_millis() > CALLBACK_THROTTLE {
+                                                callback!(callback, start, elapsed_qt, remained_qt);
                                                 last_callback = Instant::now();
                                             }
                                         }
@@ -162,25 +171,15 @@ where
                                     id_i += 1;
                                 }
                             },
-                            OpRet::Save(_) => {},
                             OpRet::Fetch(ret) => {
                                 callback = if let Some(mut callback) = callback {
                                     elapsed_qt += 1;
                                     if remained_qt > 0 {
                                         remained_qt -= 1;
                                     }
-                                    if let Some(start_fetch) = start_fetch {
-                                        if elapsed_qt > 0 && Instant::now().duration_since(last_callback).as_millis() > 100 {
-                                            let elapsed_millis = Instant::now().duration_since(start_fetch).as_millis(); 
-                                            let per_millis = elapsed_millis / elapsed_qt as u128;
-                                            let remained_millis = per_millis * remained_qt as u128;
-                                            callback(CallbackArg {
-                                                elapsed_qt,
-                                                remained_qt,
-                                                elapsed_millis, 
-                                                remained_millis, 
-                                                per_millis,
-                                            })?;
+                                    if let Some(start) = start {
+                                        if elapsed_qt > 0 && Instant::now().duration_since(last_callback).as_millis() > CALLBACK_THROTTLE {
+                                            callback!(callback, start, elapsed_qt, remained_qt);
                                             last_callback = Instant::now();
                                         }
                                     }
@@ -188,10 +187,8 @@ where
                                 } else {
                                     None
                                 };
-                                if let Some(json) = ret.json {
-                                    received_qt += 1;
-                                    push_fut_save!(fut_queue, json, ret.id, arg.out_dir);
-                                }
+                                received_qt += 1;
+                                push_fut_save!(fut_queue, ret.card, ret.id, arg.out_dir);
                                 if ids_non_existent_i < ids_non_existent.len() {
                                     let client = ret.client;
                                     push_fut_fetch!(fut_queue, client, auth, arg, ids_non_existent, ids_non_existent_i);
@@ -208,9 +205,11 @@ where
             },
         }
     }
-    info!("{}, cards::fetch_and_save", 
-        arrange_millis::get(Instant::now().duration_since(now).as_millis()), 
-    );
+    if let Some(mut callback) = callback {
+        if let Some(start) = start {
+            callback!(callback, start, elapsed_qt, remained_qt);
+        }
+    }
     
     Ok(Ret{received_qt})
 }
@@ -249,5 +248,96 @@ async fn op<'a>(arg: OpArg<'a>) -> Result<OpRet> {
 // ============================================================================
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    #[allow(unused_imports)]
+    use log::{error, warn, info, debug, trace};
+    use super::*;
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    fn init() {
+        INIT.call_once(|| env_logger::init());
+    }
+
+    use std::collections::HashSet;
+
+    #[tokio::test]
+    async fn test_file_spec() -> Result<()> {
+        init();
+
+        let out_dir = &Path::new("out_test");
+
+        let id = std::u64::MAX - 1;
+        let fspec = file_spec::get(out_dir, id);
+        assert_eq!(fspec.to_string_lossy(), "out_test/ff/ff/ff/ff/ff/ff/ff/fe.json");
+
+        let out_dir = &Path::new("out");
+        let id = std::u64::MAX;
+        let fspec = file_spec::get(out_dir, id);
+        assert_eq!(fspec.to_string_lossy(), "out/ff/ff/ff/ff/ff/ff/ff/ff.json");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_check() -> Result<()> {
+        init();
+
+        let out_dir = &Path::new("out_test");
+        let id = 42;
+
+        let ret = check::run(check::Arg { out_dir, id }).await?;
+        assert_eq!(ret, check::Ret{id: Some(id)});
+
+        Ok(())
+    }
+
+    use term::Term;
+
+    #[tokio::test]
+    async fn test_fetch_and_save() -> Result<()> {
+        init();
+
+        let mut ids: ids::Ret = HashSet::new();
+        let ids_vec: Vec<u64> = vec![
+        1767797249
+      // 1981851621,
+      // 1981867820,
+      // 1981886803,
+      // 1981901279,
+      // 1981920273,
+      // 1981924600
+        ];
+        for id in ids_vec {
+            ids.insert(id);
+        }
+        let out_dir = &Path::new("out_test");
+        let arg = Arg {
+            ids: &ids,
+            out_dir,
+            thread_limit_network: 1,
+            thread_limit_file: 12,
+            retry_count: 3,
+        };
+        let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
+
+        let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."))?;
+        let start = Instant::now();
+        let ret = fetch_and_save(&mut auth, arg, Some(|arg: CallbackArg| -> Result<()> {
+            term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
+                arrange_millis::get(arg.elapsed_millis), 
+                arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
+                arrange_millis::get(arg.remained_millis), 
+                arrange_millis::get(arg.per_millis), 
+                arg.elapsed_qt,
+                arg.elapsed_qt + arg.remained_qt,
+                arg.remained_qt,
+            ))
+        })).await?;
+        println!("{}, Объявления получены: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
+
+        Ok(())
+    }
+}
+
+
 

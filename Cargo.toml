@@ -10,6 +10,8 @@ members = [
     "id_store", 
     "cards", 
     "scan", 
+    "collect",
+    "to_csv",
     "proxy_checker",
 ]
 # [targt.x86_64-unknown-linux-musl]

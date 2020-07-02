@@ -12,11 +12,12 @@ log = "0.4"
 anyhow = "1.0"
 
 env_logger = "0.7.1"
-tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
+tokio = { version = "0.2", features = ["rt-threaded", "macros", "fs"] }
 chrono = "0.4.11"
 ansi-escapes = "0.1"
 
 env = { path = "../env" }
+term = { path = "../term" }
 auth = { path = "../auth" }
 diaps = { path = "../diaps" }
 diap_store = { path = "../diap_store" }
@@ -24,7 +25,8 @@ ids = { path = "../ids" }
 id_store = { path = "../id_store" }
 arrange_millis = { path = "../arrange_millis" }
 cards = { path = "../cards" }
-term = { path = "../term" }
+collect = { path = "../collect" }
+to_csv = { path = "../to_csv" }
 
 # url = "2.1.1"
 # reqwest = { version = "0.10.6", features = ["json"] }

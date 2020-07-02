@@ -86,6 +86,24 @@ pub struct CallbackArg {
     pub count: Option<u64>,
 }
 
+macro_rules! callback {
+    ($callback: expr, $start: expr, $count_total: expr, $checks_total: expr, $diaps: expr, $count: expr, $price_min: expr, $price_max: expr, $price_max_delta: expr) => {
+        let elapsed_millis = Instant::now().duration_since($start).as_millis();
+        let per_millis = elapsed_millis / $checks_total as u128;
+        $callback(CallbackArg {
+            count_total: $count_total.unwrap(),
+            checks_total: $checks_total,
+            elapsed_millis,
+            per_millis,
+            diaps_detected: $diaps.len(),
+            count: $count,
+            price_min: $price_min,
+            price_max: $price_max,
+            price_max_delta: $price_max_delta,
+        })?;
+    };
+}
+
 // ============================================================================
 
 /// Возвращает список диапазон цен, каждый из которых содержит близкое к arg.count_limit объявлений, но
@@ -176,25 +194,14 @@ where
             }
 
             callback = if let Some(mut callback) = callback {
-                let elapsed_millis = Instant::now().duration_since(start).as_millis();
-                let per_millis = elapsed_millis / checks_total as u128;
-                callback(CallbackArg {
-                    count_total: count_total.unwrap(),
-                    checks_total,
-                    elapsed_millis,
-                    per_millis,
-                    diaps_detected: diaps.len(),
-                    count,
-                    price_min,
-                    price_max,
-                    price_max_delta,
-                })?;
+                callback!(callback, start, count_total, checks_total, diaps, count, price_min, price_max, price_max_delta);
+
                 Some(callback)
             } else {
                 None
             };
 
-            trace!("count: {:?}", count);
+            // trace!("count: {:?}", count);
             if let Some(count) = count {
 
                 let (price_max_new, price_max_delta_new) = 
@@ -255,12 +262,9 @@ where
         price_max_delta = None;
         count = None;
     }
-
-    info!("{} ms, diaps::get: checks_total: {}, diaps.len: {}", 
-        Instant::now().duration_since(start).as_millis(),
-        checks_total, 
-        diaps.len(),
-    );
+    if let Some(mut callback) = callback {
+        callback!(callback, start, count_total, checks_total, diaps, count, price_min, price_max, price_max_delta);
+    }
 
     Ok(Ret {
         last_stamp: last_stamp.unwrap(),
