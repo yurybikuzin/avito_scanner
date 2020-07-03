@@ -12,13 +12,13 @@ use std::time::Instant;
 // ============================================================================
 // ============================================================================
 
-const DIAP_STORE_FILE_SPEC: &str = "out/diaps.json";
+const DIAP_STORE_FILE_SPEC: &str = "/out/diaps.json";
 const DIAP_FRESH_DURATION: usize = 1440; //30; // minutes
 const COUNT_LIMIT: u64 = 4900;
 const PRICE_PRECISION: isize = 20000;
 const PRICE_MAX_INC: isize = 1000000;
 
-const ID_STORE_FILE_SPEC: &str = "out/ids.json";
+const ID_STORE_FILE_SPEC: &str = "/out/ids.json";
 const ID_FRESH_DURATION: usize = 1440; //30; // minutes
 const PARAMS: &str = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
 const THREAD_LIMIT_NETWORK: usize = 1;
@@ -26,7 +26,7 @@ const THREAD_LIMIT_FILE: usize = 2;
 const ITEMS_PER_PAGE: usize = 50;
 const RETRY_COUNT: usize = 3;
 
-const CARD_OUT_DIR_SPEC: &str = "out";
+const CARD_OUT_DIR_SPEC: &str = "/out";
 
 use term::Term;
 
@@ -141,12 +141,12 @@ async fn main() -> Result<()> {
         },
     };
 
-    let out_dir = &Path::new(CARD_OUT_DIR_SPEC);
+    let out_dir = Path::new(CARD_OUT_DIR_SPEC);
 
     let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."))?;
     let arg = cards::Arg {
         ids: &ids, 
-        out_dir,
+        out_dir: &out_dir,
         thread_limit_network,
         thread_limit_file,
         retry_count,
@@ -165,8 +165,9 @@ async fn main() -> Result<()> {
     })).await?;
     println!("{}, Объявления получены: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
 
+    let out_dir = Path::new(CARD_OUT_DIR_SPEC);
     let arg = collect::Arg { 
-        out_dir: Path::new("out"),
+        out_dir: &out_dir,
         thread_limit_file: 3,
     };
 
@@ -198,7 +199,7 @@ async fn main() -> Result<()> {
     println!("{}, Объявления прочитаны: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), records.0.len());
 
     let start = Instant::now();
-    let file_path = Path::new("out/records.csv");
+    let file_path = Path::new("/out/records.csv");
     let arg = to_csv::Arg {
         file_path: &file_path,
         records: &records,

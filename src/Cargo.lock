@@ -72,6 +72,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "autocatalog"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrange_millis",
+ "auth",
+ "collect",
+ "env_logger",
+ "futures",
+ "http",
+ "ids",
+ "lazy_static",
+ "log",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "term",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

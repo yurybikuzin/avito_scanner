@@ -90,16 +90,16 @@ impl Ret for Records {
 }
 
 use std::collections::HashSet;
-pub struct AutoCatalog (pub HashSet<String>);
-impl AutoCatalog {
+pub struct Autocatalog (pub HashSet<String>);
+impl Autocatalog {
     pub fn new() -> Self {
         Self(HashSet::new())
     }
 }
 
-impl Ret for AutoCatalog {
+impl Ret for Autocatalog {
     fn adopt_record(&mut self, record: cards::Record) -> Result<()> {
-        if let Some(url) = record.auto_catalog_url {
+        if let Some(url) = record.autocatalog_url {
             self.0.insert(url);
         }
         Ok(())
@@ -313,7 +313,7 @@ mod tests {
         init();
 
         let arg = Arg { 
-            out_dir: Path::new("../out"),
+            out_dir: Path::new("/out"),
             thread_limit_file: 3,
         };
 
@@ -357,18 +357,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_collect_auto_catalog() -> Result<()> {
+    async fn test_collect_autocatalog() -> Result<()> {
         init();
 
         let arg = Arg { 
-            out_dir: Path::new("../out"),
+            out_dir: Path::new("/out"),
             thread_limit_file: 2,
         };
 
         let mut term = Term::init(term::Arg::new().header("Чтение карточек . . ."))?;
         let start = Instant::now();
-        let mut auto_catalog = AutoCatalog::new();
-        items(arg, &mut auto_catalog, Some(|arg: CallbackArg| -> Result<()> {
+        let mut autocatalog = Autocatalog::new();
+        items(arg, &mut autocatalog, Some(|arg: CallbackArg| -> Result<()> {
             match arg {
                 CallbackArg::ReadDir {elapsed_millis, dir_qt, file_qt} => {
                     term.output(format!("time: {}, dirs: {}, files: {}", 
@@ -390,8 +390,8 @@ mod tests {
                 },
             }
         })).await?;
-        println!("{}, Обнаружены ссылки на auto_catalog: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), auto_catalog.0.len());
-        println!("{:?}", auto_catalog.0.iter().map(|s| s.as_str()).take(5).collect::<Vec<&str>>());
+        println!("{}, Обнаружены ссылки на autocatalog: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), autocatalog.0.len());
+        println!("{:?}", autocatalog.0.iter().map(|s| s.as_str()).take(5).collect::<Vec<&str>>());
 
         Ok(())
     }

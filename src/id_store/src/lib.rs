@@ -47,7 +47,6 @@ impl IdStore {
         Ok(ret)
     }
     pub fn set_ids(&mut self, key: &str, ret: ids::Ret) {
-        // let key = format!("{}", params);
         let val = IdStoreItem {
             timestamp: chrono::Utc::now(),
             ret,
@@ -55,7 +54,6 @@ impl IdStore {
         self.0.insert(key.to_owned(), val);
     }
     pub fn get_ids(&self, key: &str, fresh_duration: chrono::Duration) -> Option<&IdStoreItem> {
-        // let key = format!("{}", arg);
         match self.0.get(key) {
             None => None,
             Some(item) => 

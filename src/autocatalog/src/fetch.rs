@@ -10,10 +10,12 @@ use serde_json::{Value, Number};
 
 use regex::Regex;
 
+type Item = String;
+
 pub struct Arg {
     pub client: reqwest::Client,
     pub auth: String,
-    pub id: u64,
+    pub item: Item,
     pub retry_count: usize,
 }
 
@@ -21,7 +23,7 @@ use super::card::{Card, Record};
 
 pub struct Ret {
     pub client: reqwest::Client,
-    pub id: u64,
+    pub item: Item,
     pub card: Card,
 }
 
@@ -30,9 +32,8 @@ const SLEEP_TIMEOUT: u64 = 500;
 use std::{thread, time};
 
 pub async fn run(arg: Arg) -> Result<Ret> {
-    let url = &format!("https://avito.ru/api/14/items/{}?key={}", 
-        arg.id,
-        arg.auth, 
+    let url = &format!("https://avito.ru{}", 
+        &arg.item,
     );
     let url = Url::parse(&url)?;
 
@@ -81,7 +82,7 @@ pub async fn run(arg: Arg) -> Result<Ret> {
                             warn!("{} :: {}: {}", url, code, msg);
                             return Ok(Ret {
                                 client: arg.client,
-                                id: arg.id, 
+                                item: arg.item, 
                                 card: Card::NotFound,
                             })
                         },
@@ -105,16 +106,16 @@ pub async fn run(arg: Arg) -> Result<Ret> {
         text
     }.context("cards::fetch")?;
 
-    let card = card(arg.id, url, text)?;
+    let card = card(arg.item.to_owned(), url, text)?;
 
     Ok(Ret {
         client: arg.client,
-        id: arg.id, 
+        item: arg.item, 
         card,
     })
 }
 
-fn card(id: u64, url: Url, text: Option<String>) -> Result<Card> {
+fn card(id: Item, url: Url, text: Option<String>) -> Result<Card> {
     let mut power_windows: Option<String> = None;
     let mut name: Option<String> = None;
     let mut canonical_url: Option<String> = None;
@@ -637,9 +638,6 @@ fn card(id: u64, url: Url, text: Option<String>) -> Result<Card> {
                                         },
                                     }
                                 },
-                                // "description" => {
-                                //     description = Some(val.as_str().unwrap().to_owned());
-                                // },
                                 _ => {
                                     error!("{} :: {}.{}: {:?}", url, key, sub_key, val);
                                     unreachable!();

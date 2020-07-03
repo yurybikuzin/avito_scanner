@@ -14,7 +14,7 @@ services:
         volumes:
             - ./dev/proj/sh:/sh
             - ./src:/home/rust/src
-            # - ./out:/home/rust/src/out
+            - ./out:/out
             - ./cargo-git/:/home/rust/.cargo/git
             - ./cargo-registry/:/home/rust/.cargo/registry
             - ./cargo-target/:/home/rust/src/target

@@ -9,6 +9,7 @@ members = [
     "ids", 
     "id_store", 
     "cards", 
+    "autocatalog",
     "scan", 
     "collect",
     "to_csv",
