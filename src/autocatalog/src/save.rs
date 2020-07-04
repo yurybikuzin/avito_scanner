@@ -12,16 +12,16 @@ use tokio::prelude::*;
 
 use super::card::Card;
 
-type Item = String;
-pub struct Arg<'a> {
-    pub item: Item,
+type Item = str;
+pub struct Arg<'a, I: AsRef<Item>> {
+    pub item: I,
     pub card: Card,
     pub out_dir: &'a Path,
 }
 
 pub struct Ret ();
 
-pub async fn run<'a>(arg: Arg<'a>) -> Result<Ret> {
+pub async fn run<'a, I: AsRef<Item>>(arg: Arg<'a, I>) -> Result<Ret> {
     let file_path = super::file_spec::get(arg.out_dir, arg.item);
     if let Some(dir_path) = file_path.parent() {
         fs::create_dir_all(dir_path).await?;

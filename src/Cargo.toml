@@ -3,6 +3,7 @@ default-members = [ "scan", "proxy_checker" ]
 members = [ 
     "term", 
     "env", 
+    "json",
     "arrange_millis", 
     "auth", "diaps", 
     "diap_store", 
