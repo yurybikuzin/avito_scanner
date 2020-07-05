@@ -97,9 +97,14 @@ impl Autocatalog {
     }
 }
 
+// use regex::Regex;
 impl Ret for Autocatalog {
     fn adopt_record(&mut self, record: cards::Record) -> Result<()> {
         if let Some(url) = record.autocatalog_url {
+            // lazy_static! {
+            //     static ref RE: Regex = Regex::new(r"/\d+$").unwrap();
+            // }
+            // let url = RE.replace(&url, "").to_string();
             self.0.insert(url);
         }
         Ok(())
@@ -356,6 +361,9 @@ mod tests {
         Ok(())
     }
 
+    use tokio::fs::File;
+    use tokio::prelude::*;
+
     #[tokio::test]
     async fn test_collect_autocatalog() -> Result<()> {
         init();
@@ -391,7 +399,13 @@ mod tests {
             }
         })).await?;
         println!("{}, Обнаружены ссылки на autocatalog: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), autocatalog.0.len());
-        println!("{:?}", autocatalog.0.iter().map(|s| s.as_str()).take(5).collect::<Vec<&str>>());
+        let json = serde_json::to_string_pretty(&autocatalog.0)?;
+        let file_path = Path::new("out_test/autocatalog.js");
+        let mut file = File::create(file_path).await?;
+        file.write_all(json.as_bytes()).await?;
+        println!("Записаны в {:?}", file_path);
+
+        // println!("{:?}", autocatalog.0.iter().map(|s| s.as_str()).take(5).collect::<Vec<&str>>());
 
         Ok(())
     }

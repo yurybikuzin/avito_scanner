@@ -18,20 +18,23 @@ use futures::{
     },
 };
 
-mod card;
+mod fetched;
 mod file_spec;
 mod check;
 mod save;
 mod fetch;
 
-pub use card::{Card, Record};
+pub use fetched::{Fetched, Record};
+use std::collections::HashSet;
 
 // ============================================================================
 // ============================================================================
+
 
 // type Items = collect::Autocatalog;
 pub struct Arg<'a> {
-    pub items: &'a collect::Autocatalog, 
+    // pub items_to_check: &'a collect::Autocatalog, 
+    pub items_to_check: &'a HashSet<String>, 
     pub out_dir: &'a Path, 
     pub thread_limit_network: usize,
     pub thread_limit_file: usize,
@@ -39,8 +42,8 @@ pub struct Arg<'a> {
 }
 
 macro_rules! push_fut_fetch {
-    ($fut_queue: expr, $client: expr, $arg: expr, $items_non_existent: expr, $items_non_existent_i: expr) => {
-        let item = $items_non_existent[$items_non_existent_i].to_owned();
+    ($fut_queue: expr, $client: expr, $arg: expr, $items_to_fetch: expr, $items_to_fetch_i: expr) => {
+        let item = $items_to_fetch[$items_to_fetch_i].to_owned();
         let arg = OpArg::Fetch (fetch::Arg {
             client: $client,
             item: item,
@@ -48,15 +51,15 @@ macro_rules! push_fut_fetch {
         });
         let fut = op(arg);
         $fut_queue.push(fut);
-        $items_non_existent_i += 1;
+        $items_to_fetch_i += 1;
     };
 }
 
 macro_rules! push_fut_save {
-    ($fut_queue: expr, $card: expr, $item: expr, $out_dir: expr) => {
+    ($fut_queue: expr, $fetched: expr, $item: expr, $out_dir: expr) => {
         let arg = OpArg::Save (save::Arg {
             item: $item,
-            card: $card,
+            fetched: $fetched,
             out_dir: $out_dir
         });
         let fut = op(arg);
@@ -104,27 +107,27 @@ pub struct Ret {
 
 const CALLBACK_THROTTLE: u128 = 100;
 pub async fn fetch_and_save<'a, Cb>(
-    // auth: &mut auth::Lazy,
     arg: Arg<'a>, 
     mut callback: Option<Cb>,
 ) -> Result<Ret>
 where 
     Cb: FnMut(CallbackArg) -> Result<()>,
 {
-    let mut items_non_existent: Vec<String> = Vec::new();
-    let mut items_non_existent_i: usize = 0;
+    let mut items_to_fetch: Vec<String> = Vec::new();
+    let mut items_to_fetch_i: usize = 0;
 
-    let mut items_i = 0;
-    let items_len = arg.items.0.len();
-    let items = arg.items.0.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
+    let mut items_to_check_i = 0;
+    let items_to_check = arg.items_to_check.iter().cloned().collect::<Vec<String>>();
+
+    let mut items_to_fetch_uniq: HashSet<String> = HashSet::new();
 
     let mut fut_queue = FuturesUnordered::new();
-    while items_i < arg.thread_limit_file && items_i < items_len {
-        let item = items[items_i].to_owned();
-        push_fut_check!(fut_queue, item, arg.out_dir);
-        items_i += 1;
+    while items_to_check_i < arg.thread_limit_file && items_to_check_i < items_to_check.len() {
+        let item_to_check = items_to_check[items_to_check_i].to_owned();
+        push_fut_check!(fut_queue, item_to_check, arg.out_dir);
+        items_to_check_i += 1;
     }
-    let mut used_network_threads = 0;
+    let mut used_network_threads: usize = 0;
 
     let mut received_qt = 0;
     let mut elapsed_qt = 0;
@@ -136,17 +139,20 @@ where
             ret = fut_queue.select_next_some() => {
                 match ret {
                     Err(err) => {
-                        return Err(err.context("cards::fetch_and_save"));
+                        return Err(err.context("autocatalog::fetch_and_save"));
                     },
                     Ok(ret) => {
                         match ret {
                             OpRet::Save(_) => {},
-                            OpRet::Check(check::Ret{id}) => {
-                                if let Some(id) = id {
-                                    if items_non_existent.len() == 0 {
+                            OpRet::Check(check::Ret{item_to_fetch}) => {
+                                if let Some(item_to_fetch) = item_to_fetch {
+                                    if items_to_fetch.len() == 0 {
                                         start = Some(Instant::now());
                                     }
-                                    items_non_existent.push(id);
+                                    if !items_to_fetch_uniq.contains(&item_to_fetch) {
+                                        items_to_fetch.push(item_to_fetch.to_owned());
+                                        items_to_fetch_uniq.insert(item_to_fetch.to_owned());
+                                    }
                                     callback = if let Some(mut callback) = callback {
                                         remained_qt += 1;
                                         if let Some(start) = start {
@@ -161,14 +167,14 @@ where
                                     };
                                     if used_network_threads < arg.thread_limit_network {
                                         let client = reqwest::Client::new();
-                                        push_fut_fetch!(fut_queue, client, arg, items_non_existent, items_non_existent_i);
+                                        push_fut_fetch!(fut_queue, client, arg, items_to_fetch, items_to_fetch_i);
                                         used_network_threads += 1;
                                     }
                                 }
-                                if items_i < items_len {
-                                    let item = items[items_i].to_owned();
-                                    push_fut_check!(fut_queue, item, arg.out_dir);
-                                    items_i += 1;
+                                if items_to_check_i < items_to_check.len() {
+                                    let item_to_check = items_to_check[items_to_check_i].to_owned();
+                                    push_fut_check!(fut_queue, item_to_check, arg.out_dir);
+                                    items_to_check_i += 1;
                                 }
                             },
                             OpRet::Fetch(ret) => {
@@ -188,10 +194,10 @@ where
                                     None
                                 };
                                 received_qt += 1;
-                                push_fut_save!(fut_queue, ret.card, ret.item, arg.out_dir);
-                                if items_non_existent_i < items_non_existent.len() {
+                                push_fut_save!(fut_queue, ret.fetched, ret.item, arg.out_dir);
+                                if items_to_fetch_i < items_to_fetch.len() {
                                     let client = ret.client;
-                                    push_fut_fetch!(fut_queue, client, arg, items_non_existent, items_non_existent_i);
+                                    push_fut_fetch!(fut_queue, client, arg, items_to_fetch, items_to_fetch_i);
                                 } else {
                                     used_network_threads -= 1;
                                 }
@@ -207,17 +213,21 @@ where
     }
     if let Some(mut callback) = callback {
         if let Some(start) = start {
-            callback!(callback, start, elapsed_qt, remained_qt);
+            if elapsed_qt > 0 {
+                callback!(callback, start, elapsed_qt, remained_qt);
+            }
         }
     }
+    info!("items_to_fetch: {}", items_to_fetch.len());
+    info!("items_to_fetch_uniq: {}", items_to_fetch_uniq.len());
     
     Ok(Ret{received_qt})
 }
 
 type Item = str;
-enum OpArg<'a, I: AsRef<Item>> {
+enum OpArg<'a, I: AsRef<Item>, P: AsRef<Path>> {
     Fetch(fetch::Arg<I>),
-    Save(save::Arg<'a, I>),
+    Save(save::Arg<I, P>),
     Check(check::Arg<'a>),
 }
 
@@ -227,7 +237,7 @@ enum OpRet<I: AsRef<Item>> {
     Check(check::Ret),
 }
 
-async fn op<'a, I: AsRef<Item>>(arg: OpArg<'a, I>) -> Result<OpRet<I>> {
+async fn op<'a, I: AsRef<Item>, P: AsRef<Path>>(arg: OpArg<'a, I, P>) -> Result<OpRet<I>> {
     match arg {
         OpArg::Fetch(arg) => {
             let ret = fetch::run(arg).await?;
@@ -259,85 +269,50 @@ mod tests {
         INIT.call_once(|| env_logger::init());
     }
 
-    // use std::collections::HashSet;
+    use term::Term;
+    use json::{Json};
+    // use itertools::Itertools;
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
 
-    // #[tokio::test]
-    // async fn test_file_spec() -> Result<()> {
-    //     init();
-    //
-    //     let out_dir = &Path::new("out_test");
-    //
-    //     let id = std::u64::MAX - 1;
-    //     let fspec = file_spec::get(out_dir, id);
-    //     assert_eq!(fspec.to_string_lossy(), "out_test/ff/ff/ff/ff/ff/ff/ff/fe.json");
-    //
-    //     let out_dir = &Path::new("out");
-    //     let id = std::u64::MAX;
-    //     let fspec = file_spec::get(out_dir, id);
-    //     assert_eq!(fspec.to_string_lossy(), "out/ff/ff/ff/ff/ff/ff/ff/ff.json");
-    //
-    //     Ok(())
-    // }
-    //
-    // #[tokio::test]
-    // async fn test_check() -> Result<()> {
-    //     init();
-    //
-    //     let out_dir = &Path::new("out_test");
-    //     let id = 42;
-    //
-    //     let ret = check::run(check::Arg { out_dir, id }).await?;
-    //     assert_eq!(ret, check::Ret{id: Some(id)});
-    //
-    //     Ok(())
-    // }
-    //
-    // use term::Term;
-    //
-    // #[tokio::test]
-    // async fn test_fetch_and_save() -> Result<()> {
-    //     init();
-    //
-    //     let mut ids: ids::Ret = HashSet::new();
-    //     let ids_vec: Vec<u64> = vec![
-    //     1767797249
-    //   // 1981851621,
-    //   // 1981867820,
-    //   // 1981886803,
-    //   // 1981901279,
-    //   // 1981920273,
-    //   // 1981924600
-    //     ];
-    //     for id in ids_vec {
-    //         ids.insert(id);
-    //     }
-    //     let out_dir = &Path::new("out_test");
-    //     let arg = Arg {
-    //         ids: &ids,
-    //         out_dir,
-    //         thread_limit_network: 1,
-    //         thread_limit_file: 12,
-    //         retry_count: 3,
-    //     };
-    //     let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
-    //
-    //     let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."))?;
-    //     let start = Instant::now();
-    //     let ret = fetch_and_save(arg, Some(|arg: CallbackArg| -> Result<()> {
-    //         term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
-    //             arrange_millis::get(arg.elapsed_millis), 
-    //             arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
-    //             arrange_millis::get(arg.remained_millis), 
-    //             arrange_millis::get(arg.per_millis), 
-    //             arg.elapsed_qt,
-    //             arg.elapsed_qt + arg.remained_qt,
-    //             arg.remained_qt,
-    //         ))
-    //     })).await?;
-    //     println!("{}, Объявления получены: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
-    //
-    //     Ok(())
-    // }
+    #[tokio::test]
+    async fn test_fetch_and_save() -> Result<()> {
+        init();
+
+        let items = Json::from_file("test_data/autocatalog_urls.json").await?;
+
+        let items = 
+            items.iter_vec()?
+            .map(|val| val.as_string().unwrap())
+            .collect::<Vec<String>>()
+        ;
+        let items: HashSet<String> = HashSet::from_iter(items.iter().cloned());
+        let out_dir = Path::new("out_test");
+        let arg = Arg {
+            items_to_check: &items,
+            out_dir,
+            thread_limit_network: 1,
+            thread_limit_file: 2,
+            retry_count: 3,
+        };
+
+        let mut term = Term::init(term::Arg::new().header("Получение автокаталога . . ."))?;
+        let start = Instant::now();
+        let ret = fetch_and_save(arg, Some(|arg: CallbackArg| -> Result<()> {
+            term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
+                arrange_millis::get(arg.elapsed_millis), 
+                arrange_millis::get(arg.elapsed_millis + arg.remained_millis), 
+                arrange_millis::get(arg.remained_millis), 
+                arrange_millis::get(arg.per_millis), 
+                arg.elapsed_qt,
+                arg.elapsed_qt + arg.remained_qt,
+                arg.remained_qt,
+            ))
+        })).await?;
+        println!("{}, Автокаталог получен: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
+
+        Ok(())
+    }
 }
 
 

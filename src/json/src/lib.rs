@@ -197,15 +197,31 @@ impl<'a> Json {
     }
     pub async fn from_file<P: AsRef<std::path::Path>>(file_path: P) -> Result<Self> {
         let file_path = file_path.as_ref();
-        let mut file = File::open(file_path).await?;
+        let mut file = File::open(file_path).await
+            .map_err(|err| Error::new(err))
+            .context(format!(r#"Json::from_file({:?}): File::open"#, file_path))?
+        ;
         let mut contents = vec![];
-        file.read_to_end(&mut contents).await?;
-        let decoded = std::str::from_utf8(&contents)?;
+        file.read_to_end(&mut contents).await
+            .map_err(|err| Error::new(err))
+            .context(format!(r#"Json::from_file({:?}): file.read_to_end"#, file_path))?
+        ;
+        let s = std::str::from_utf8(&contents)?;
 
-        let value: Value = serde_json::from_str(&decoded)?;
+        let value: Value = serde_json::from_str(&s)
+            .map_err(|err| Error::new(err))
+            .context(format!(r#"Json::from_file({:?}): serde_json::from_str {:?}"#, file_path, s))?
+        ;
         Ok(Self {
             value,
             path: JsonPath::new(JsonSource::FilePath(file_path.to_owned())),
+        })
+    }
+    pub fn from_str<S: AsRef<str>, S2: AsRef<str>>(s: S, name: S2) -> Result<Self> {
+        let value: Value = serde_json::from_str(s.as_ref())?;
+        Ok(Self {
+            value,
+            path: JsonPath::new(JsonSource::Name(name.as_ref().to_owned())),
         })
     }
     pub fn get<'b, P: AsRef<[By]>>(&'b self, path_items: P) -> Result<Self> {
@@ -243,6 +259,9 @@ impl<'a> Json {
             },
         }
     }
+    pub fn as_string(&self) -> Result<String> {
+        Ok(self.as_str()?.to_owned())
+    }
     pub fn as_vec(&self) -> Result<&Vec<Value>> {
         match &self.value {
             Value::Array(vec) => Ok(vec),
@@ -275,7 +294,7 @@ impl<'a> Json {
             },
         }
     }
-    pub fn map_iter<'b>(&'b self) -> Result<MapIterator<'b>> {
+    pub fn iter_map<'b>(&'b self) -> Result<MapIterator<'b>> {
         let map = self.as_map()?;
         let iter = MapIterator {
             iter: map.iter(),
@@ -283,7 +302,7 @@ impl<'a> Json {
         };
         Ok(iter)
     }
-    pub fn vec_iter<'b>(&'b self) -> Result<VecIterator<'b>> {
+    pub fn iter_vec<'b>(&'b self) -> Result<VecIterator<'b>> {
         let vec = self.as_vec()?;
         let iter = VecIterator {
             iter: vec.iter(),
@@ -598,7 +617,7 @@ mod tests {
 
         let value = json.get([By::key("itemsBlockData"), By::key("searchButton")])?;
         let mut keys: Vec<&str> = Vec::new();
-        for (key, val) in value.map_iter()? {
+        for (key, val) in value.iter_map()? {
             keys.push(key);
             match key {
                 "errorInfoText" => {
@@ -615,7 +634,7 @@ mod tests {
         }
         assert_eq!(keys, ["errorButtonText", "errorInfoText", "errorSearchLink", "infoText"]);
 
-        let err = value.vec_iter();
+        let err = value.iter_vec();
         let tst = err.unwrap_err().downcast::<String>().unwrap();
         let eta = "\"test_data/sample.json\".\"itemsBlockData\".\"searchButton\" expected to be an Array, but: {\n  \"errorButtonText\": \"Выбрать другой автомобиль на Авито\",\n  \"errorInfoText\": {\n    \"bold\": \"На Авито нет BMW 5 серия\",\n    \"normal\": \", но есть много других машин\"\n  },\n  \"errorSearchLink\": \"/rossiya/avtomobili\",\n  \"infoText\": {\n    \"bold\": {\n      \"few\": \"объявления BMW 5 серия\",\n      \"many\": \"объявлений BMW 5 серия\",\n      \"one\": \"объявление BMW 5 серия\",\n      \"other\": \"объявлений BMW 5 серия\"\n    },\n    \"normal\": \"найдено в России\"\n  }\n}".to_owned();
         assert_eq!(tst, eta);
@@ -632,12 +651,31 @@ mod tests {
 
         let value = json.get([By::key("breadcrumbs")])?;
         let mut titles: Vec<String> = Vec::new();
-        for val in value.vec_iter()? {
+        for val in value.iter_vec()? {
             let val = val.get([By::key("title")])?;
             let s = val.as_str()?;
             titles.push(s.to_owned());
         }
         assert_eq!(titles, ["Все объявления в России", "Транспорт", "Автомобили"]);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_json_c() -> Result<()> {
+        init();
+
+        let json = r#"
+            { "some": "thing" }
+        "#;
+        let json: Json = Json::from_str(json, "json")?;
+        let value = json.get([By::key("some")])?;
+        assert_eq!(value.as_str()?, "thing");
+
+        let err = value.parse_as_u8();
+        let tst = err.unwrap_err().downcast::<String>().unwrap();
+        let eta = r#""json"."some" expected to be a u8 or String parseable to u8, but: "thing""#.to_owned();
+        assert_eq!(tst, eta); 
 
         Ok(())
     }
