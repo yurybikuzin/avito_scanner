@@ -18,6 +18,18 @@ services:
             - ./cargo-git/:/home/rust/.cargo/git
             - ./cargo-registry/:/home/rust/.cargo/registry
             - ./cargo-target/:/home/rust/src/target
+        ports:
+            - $BW_DEV_PROJ_PORT:8000
+
+    rmq:
+        container_name: ${BW_PROJ_NAME}-rmq
+        image: rabbitmq:3.8.4-management
+        environment:
+            RABBITMQ_DEFAULT_USER: rmq
+            RABBITMQ_DEFAULT_PASS: rmq
+        ports:
+            - $BW_DEV_RABBITMQ_PORT:5672
+            - $BW_DEV_RABBITMQ_PORT_MANAGEMENT:15672
 
     auth:
         container_name: ${BW_PROJ_NAME}-auth

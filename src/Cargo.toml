@@ -1,5 +1,5 @@
 [workspace]
-default-members = [ "scan", "proxy_checker" ]
+default-members = [ "scan", "rmq" ]
 members = [ 
     "term", 
     "env", 
@@ -15,7 +15,10 @@ members = [
     "collect",
     "to_csv",
     "proxy_checker",
+    "proxy",
+    "rmq",
 ]
+# http://rootjazz.com/proxies/proxies.txt
 # [targt.x86_64-unknown-linux-musl]
 # linker = "x86_64-linux-musl-gcc"
 

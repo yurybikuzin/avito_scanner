@@ -174,7 +174,7 @@ where
                                 if items_to_check_i < items_to_check.len() {
                                     let item_to_check = items_to_check[items_to_check_i].to_owned();
                                     push_fut_check!(fut_queue, item_to_check, arg.out_dir);
-                                    items_to_check_i += 1;
+                                    items_to_fetch_i += 1;
                                 }
                             },
                             OpRet::Fetch(ret) => {
