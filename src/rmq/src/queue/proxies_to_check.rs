@@ -20,11 +20,11 @@ pub async fn process(pool: Pool) -> Result<()> {
     loop {
         retry_interval.tick().await;
         let queue_name = "proxies_to_check";
-        let consumer_name = "proxies_to_check_consumer";
-        println!("connecting {} ...", consumer_name);
-        match listen(pool.clone(), consumer_name, queue_name).await {
-            Ok(_) => println!("{} listen returned", consumer_name),
-            Err(e) => eprintln!("{} listen had an error: {}", consumer_name, e),
+        let consumer_tag = "proxies_to_check_consumer";
+        println!("connecting {} ...", consumer_tag);
+        match listen(pool.clone(), consumer_tag, queue_name).await {
+            Ok(_) => println!("{} listen returned", consumer_tag),
+            Err(e) => eprintln!("{} listen had an error: {}", consumer_tag, e),
         };
     }
 }
@@ -46,15 +46,15 @@ use futures::{
         FuturesUnordered,
     },
 };
-async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_name: S, queue_name: S2) -> Result<()> {
+async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queue_name: S2) -> Result<()> {
     let conn = get_conn(pool).await.map_err(|e| {
         eprintln!("could not get rmq conn: {}", e);
         e
     })?;
     let channel = conn.create_channel().await?;
     let _queue = get_queue(&channel, queue_name.as_ref()).await?;
-    let mut consumer = basic_consume(&channel, queue_name.as_ref(), consumer_name.as_ref()).await?;
-    println!("{} connected, waiting for messages", consumer_name.as_ref());
+    let mut consumer = basic_consume(&channel, queue_name.as_ref(), consumer_tag.as_ref()).await?;
+    println!("{} connected, waiting for messages", consumer_tag.as_ref());
     // let mut url_proxies: Vec<reqwest::Proxy> = Vec::new();
     // let mut delay: Option<tokio::time::Delay> = None;
     let mut fut_queue = FuturesUnordered::new();
@@ -88,7 +88,6 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_name: S, que
 
                         match reqwest::Proxy::all(&url_proxy) {
                             Err(_err) => {
-                                // error!("{}: {}", url, err);
                             },
                             Ok(url_proxy) => {
                                 let own_ip = match own_ip_opt {
@@ -124,69 +123,6 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_name: S, que
             },
         }
     }
-    // while let Some(delivery) = consumer.next().await {
-    //     // let queue = get_queue(&channel, queue_name.as_ref()).await?;
-    //     // info!("message_count: {}", queue.message_count());
-    //
-    //     if let Ok((channel, delivery)) = delivery {
-    //         let line = std::str::from_utf8(&delivery.data).unwrap();
-    //         let url_proxy = format!("http://{}", line);
-    //         match reqwest::Proxy::all(&url_proxy) {
-    //             Err(_err) => {
-    //                 // error!("{}: {}", url, err);
-    //             },
-    //             Ok(url_proxy) => {
-    //                 url_proxies.push(url_proxy);
-    //                 info!("len: {}", url_proxies.len());
-    //         //         let client = reqwest::Client::builder()
-    //         //             .proxy(url_proxy)
-    //         //             .timeout(Duration::from_secs(10))
-    //         //             .build()?
-    //         //         ;
-    //         //         // match get_ip(client).await {
-    //         //         //     Err(_err) => {
-    //         //         //         // error!("item: {}, err: {:?}", arg.item, err);
-    //         //         //         Ok(Ret{item: None})
-    //         //         //     },
-    //         //         //     Ok(ip) => {
-    //         //         //         if ip == ip_eta {
-    //         //         //             Ok(Ret{item: None})
-    //         //         //         } else {
-    //         //         //             Ok(Ret{item: Some(arg.item.to_owned())})
-    //         //         //         }
-    //         //         //     },
-    //         //         // }
-    //         //         // let url = "https://bikuzin.baza-winner.ru/echo";
-    //         //         // let text = client.get(url)
-    //         //         //     .send()
-    //         //         //     .await?
-    //         //         //     .text()
-    //         //         //     .await?
-    //         //         // ;
-    //         //         // let json = Json::from_str(text, url)?;
-    //         //         // let ip = json.get([By::key("headers"), By::key("x-real-ip")])?.as_string()?;
-    //         //         // let arg = OpArg::Check (check::Arg {
-    //         //         //     ip: $ip.to_owned(),
-    //         //         //     client,
-    //         //         //     item,
-    //         //         // });
-    //         //         // let fut = op(arg);
-    //         //         // $fut_queue.push(fut);
-    //         //         // $used_network_threads += 1;
-    //             },
-    //         };
-    //         // let client = reqwest::Client::builder()
-    //         //     .proxy()
-    //         //     .timeout(Duration::from_secs(10))
-    //         //     .build()?
-    //         // ;
-    //         //
-    //
-    //         channel
-    //             .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-    //             .await?
-    //     }
-    // }
     Ok(())
 }
 

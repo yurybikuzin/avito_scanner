@@ -1,11 +1,14 @@
 #[allow(unused_imports)]
+use log::{error, warn, info, debug, trace};
+#[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
+
 use super::req::Req;
 use warp::{Rejection, Reply};
 use super::rmq::{self, Pool};
 use lapin::{ Queue, Channel };
 type WebResult<T> = std::result::Result<T, Rejection>;
-use super::error;
+use super::error::{self};
 
 impl warp::reject::Reject for error::Error {}
 
@@ -14,8 +17,8 @@ pub async fn health() -> WebResult<impl Reply> {
 }
 
 pub async fn req(req: Req, pool: Pool) -> WebResult<impl Reply> {
+    info!("got: {}", serde_json::to_string_pretty(&req).unwrap());
     let payload = serde_json::to_string_pretty(&req).unwrap();
-    // let payload = payload.as_bytes();
     let rmq_conn = rmq::get_conn(pool).await.map_err(|e| {
         eprintln!("can't connect to rmq, {}", e);
         warp::reject::custom(error::Error::RMQPoolError(e))

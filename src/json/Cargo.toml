@@ -19,7 +19,7 @@ tokio = { version = "0.2", features = ["fs"] }
 paste = "0.1"
 
 [dev-dependencies]
-env_logger = "0.7.1"
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
+pretty_env_logger = "0.4"
 pretty_assertions = "0.6.1"
 

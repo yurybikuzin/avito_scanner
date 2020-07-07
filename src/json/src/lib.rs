@@ -415,7 +415,7 @@ mod tests {
     use std::sync::Once;
     static INIT: Once = Once::new();
     fn init() {
-        INIT.call_once(|| env_logger::init());
+        INIT.call_once(|| pretty_env_logger::init());
     }
 
     use pretty_assertions::{assert_eq};

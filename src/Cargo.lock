@@ -1017,10 +1017,10 @@ name = "json"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "env_logger",
  "log 0.4.8",
  "paste",
  "pretty_assertions",
+ "pretty_env_logger",
  "serde_json",
  "tokio",
 ]
@@ -1900,6 +1900,7 @@ dependencies = [
  "json",
  "lapin",
  "log 0.4.8",
+ "pretty_assertions",
  "pretty_env_logger",
  "reqwest",
  "serde",

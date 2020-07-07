@@ -1,6 +1,8 @@
 #![recursion_limit="512"]
 
 #[allow(unused_imports)]
+use log::{error, warn, info, debug, trace};
+#[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
 
 use futures::{join };
@@ -15,7 +17,7 @@ mod queue;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    if env::var_os("RUST_LOG").is_none() {
+    if env::var("RUST_LOG").is_err() {
         // Set `RUST_LOG=todos=debug` to see debug logs,
         // this only shows access logs.
         env::set_var("RUST_LOG", "rmq=info");
@@ -26,9 +28,10 @@ async fn main() -> Result<()> {
 
     let routes = api::api(pool.clone());
 
-    println!("Started server at localhost:8000");
+    let port = env::var("RMQ_PORT").unwrap_or("8000".to_owned()).parse::<u16>()?;
+    println!("Started server at localhost:{}", port);
     let _ = join!(
-        warp::serve(routes).run(([0, 0, 0, 0], 8000)),
+        warp::serve(routes).run(([0, 0, 0, 0], port)),
         queue::request::process(pool.clone()),
         queue::fetch_proxies::process(pool.clone()),
         queue::proxies_to_check::process(pool.clone()),

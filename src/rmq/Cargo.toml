@@ -28,3 +28,5 @@ reqwest = "0.10.6"
 
 json = { path = "../json" }
 
+[dev-dependencies]
+pretty_assertions = "0.6.1"
