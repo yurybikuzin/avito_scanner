@@ -3,4 +3,5 @@
 cargo-git/
 cargo-target/
 cargo-registry/
+src/target/
 
