@@ -8,13 +8,13 @@ use lapin::{
     Consumer,
     options::{
         BasicAckOptions, 
-        // BasicRejectOptions,
+        BasicRejectOptions,
         // BasicNackOptions,
     }, 
 };
 use std::time::Duration;
 use futures::{StreamExt};
-use super::super::rmq::{get_conn, get_queue, Pool, basic_consume };
+use super::super::rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish };
 
 pub async fn process(pool: Pool) -> Result<()> {
     let mut retry_interval = tokio::time::interval(Duration::from_secs(5));
@@ -30,7 +30,9 @@ pub async fn process(pool: Pool) -> Result<()> {
     }
 }
 const RESPONSE_TIMEOUT: u64 = 5; //secs
+const PROXY_REST_DURATION: u64 = 500; //millis
 use super::super::req::Req;
+use super::super::res::Res;
 async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queue_name: S2) -> Result<()> {
     let conn = get_conn(pool).await.map_err(|e| {
         eprintln!("could not get rmq conn: {}", e);
@@ -43,11 +45,8 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     println!("{} connected, waiting for messages", consumer_tag.as_ref());
     while let Some(consumer_next) = consumer.next().await {
         if let Ok((channel, delivery)) = consumer_next {
-
-            // println!("received msg: {:?}", delivery);
             let s = std::str::from_utf8(&delivery.data).unwrap();
             let req: Req = serde_json::from_str(&s).unwrap();
-            // println!("request data: {:?}", json);
             let req_delivery_tag = delivery.delivery_tag;
             let no_proxy = req.no_proxy.unwrap_or(false); 
             if no_proxy {
@@ -73,7 +72,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                             error!("is_redirect: {}, url: {:?}", err, err.url());
                             std::process::exit(1);
                         } else {
-                            error!("other: {}", err);
+                            error!("other: {:?}", err);
                             std::process::exit(1);
                         }
                     },
@@ -97,6 +96,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                 if let Some(consumer_proxies_to_use_next) = consumer_proxies_to_use.next().await {
                     if let Ok((channel, delivery)) = consumer_proxies_to_use_next {
                         let line = std::str::from_utf8(&delivery.data).unwrap();
+                        trace!("line: {}", line);
                         let url_proxy = format!("http://{}", line);
                         let url_proxy = reqwest::Proxy::all(&url_proxy).unwrap();
                         let client = reqwest::Client::builder()
@@ -115,36 +115,61 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                     channel
                                         .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
                                         .await?
+                                    ;
+                                    let queue_name = "proxies_timeout";
+                                    let _queue = get_queue(&channel, queue_name).await?;
+                                    basic_publish(&channel, queue_name, line).await?;
+                                    channel.basic_reject(req_delivery_tag, BasicRejectOptions{ requeue: true }).await?;
+
                                 } else if err.is_builder() {
-                                    error!("is_builder: {}", err);
+                                    error!("is_builder({}): {}", line, err);
                                     std::process::exit(1);
                                 } else if err.is_status() {
-                                    error!("is_status: {}, status: {:?}", err, err.status());
+                                    error!("is_status({}): {}, status: {:?}", line, err, err.status());
                                     std::process::exit(1);
                                 } else if err.is_redirect() {
-                                    error!("is_redirect: {}, url: {:?}", err, err.url());
+                                    error!("is_redirect({}): {}, url: {:?}", line, err, err.url());
                                     std::process::exit(1);
                                 } else {
-                                    error!("other: {}", err);
+                                    error!("other({}): {}", line, err);
                                     std::process::exit(1);
                                 }
                             },
                             Ok(response) => {
                                 let status = response.status();
-                                info!("{}: {}", req.url, status);
+                                if status == http::StatusCode::FORBIDDEN {
+                                    warn!("forbidden {}", line);
+                                    channel
+                                        .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
+                                        .await?
+                                    ;
+                                    let queue_name = "proxies_forbidden";
+                                    let _queue = get_queue(&channel, queue_name).await?;
+                                    basic_publish(&channel, queue_name, line).await?;
+                                    channel.basic_reject(req_delivery_tag, BasicRejectOptions{ requeue: true }).await?;
+                                } else {
+                                    let text = response.text().await?;
+                                    info!("{}: {}", req.url, status);
+                                    let res = Res {
+                                        status,
+                                        text,
+                                    };
+
+                                    let queue_name: &str = req.reply_to.as_ref();
+                                    let _queue = get_queue(&channel, queue_name).await?;
+                                    basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
+
+                                    channel.basic_ack(req_delivery_tag, BasicAckOptions::default()).await?;
+                                    tokio::time::delay_for(Duration::from_millis(PROXY_REST_DURATION)).await;
+                                    
+                                    channel.basic_reject(delivery.delivery_tag, BasicRejectOptions{ requeue: true }).await?;
+                                }
                             },
                         }
-                        channel
-                            .basic_ack(req_delivery_tag, BasicAckOptions::default())
-                            .await?
                     }
                 }
                 consumer_proxies_to_use_opt = Some(consumer_proxies_to_use);
             }
-
-
-            // channel
-            //     .basic_reject(delivery.delivery_tag, BasicRejectOptions{ requeue: true })
         }
     }
     Ok(())

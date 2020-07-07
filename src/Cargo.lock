@@ -1897,6 +1897,7 @@ dependencies = [
  "deadpool",
  "deadpool-lapin",
  "futures",
+ "http",
  "json",
  "lapin",
  "log 0.4.8",

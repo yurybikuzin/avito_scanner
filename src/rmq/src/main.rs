@@ -9,6 +9,7 @@ use futures::{join };
 use std::env;
 
 mod req;
+mod res;
 mod api;
 mod handlers;
 mod rmq;

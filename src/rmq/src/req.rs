@@ -12,23 +12,24 @@ use serde::de::{self,
 use std::time::Duration;
 #[derive(Debug)]
 pub struct Req {
+    pub reply_to: String,
     pub method: reqwest::Method,
     pub url: reqwest::Url,
     pub timeout: Option<Duration>,
     pub no_proxy: Option<bool>,
-    // pub user_agent: Option<V>
 }
 
 #[derive(Deserialize)]
 #[serde(field_identifier, rename_all = "snake_case")]
 enum Field { 
+    ReplyTo,
     Method, 
     Url, 
     Timeout,
     NoProxy,
 }
 
-const FIELDS: &'static [&'static str] = &["method", "url", "timeout", "no_proxy"];
+const FIELDS: &'static [&'static str] = &["reply_to", "method", "url", "timeout", "no_proxy"];
 
 use serde::{Deserialize};
 impl Serialize for Req {
@@ -39,6 +40,9 @@ impl Serialize for Req {
         let mut state = serializer.serialize_struct("Req", FIELDS.len())?;
         for field in FIELDS {
             match *field {
+                "reply_to" => {
+                    state.serialize_field("reply_to", &self.reply_to.as_str())?;
+                },
                 "method" => {
                     let method = match self.method {
                         reqwest::Method::GET => "GET",
@@ -98,12 +102,19 @@ impl<'de> Visitor<'de> for ReqVisitor {
     where
         V: MapAccess<'de>,
     {
+        let mut reply_to = None;
         let mut method = None;
         let mut url = None;
         let mut timeout = None;
         let mut no_proxy = None;
         while let Some(key) = map.next_key()? {
             match key {
+                Field::ReplyTo => {
+                    if reply_to.is_some() {
+                        return Err(de::Error::duplicate_field("reply_to"));
+                    }
+                    reply_to = Some(map.next_value()?);
+                }
                 Field::Method => {
                     if method.is_some() {
                         return Err(de::Error::duplicate_field("method"));
@@ -146,9 +157,10 @@ impl<'de> Visitor<'de> for ReqVisitor {
                 }
             }
         }
+        let reply_to = reply_to.ok_or_else(|| de::Error::missing_field("reply_to"))?;
         let method = method.ok_or_else(|| de::Error::missing_field("method"))?;
         let url = url.ok_or_else(|| de::Error::missing_field("url"))?;
-        Ok(Req {method, url, timeout, no_proxy})
+        Ok(Req {reply_to, method, url, timeout, no_proxy})
     }
 }
 
@@ -171,10 +183,11 @@ mod tests {
 
 
     #[tokio::test]
-    async fn test_rec() -> Result<()> {
+    async fn test_req() -> Result<()> {
         init();
 
         let json = r#"{
+            "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo",
             "timeout": 5,
@@ -186,6 +199,7 @@ mod tests {
         assert_eq!(tst, eta);
 
         let json = r#"{
+            "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo",
             "timeout": 5
@@ -196,6 +210,7 @@ mod tests {
         assert_eq!(tst, eta);
 
         let json = r#"{
+            "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo"
         }"#;
@@ -205,13 +220,14 @@ mod tests {
         assert_eq!(tst, eta);
 
         let json = r#"{
+            "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo",
             "proxy": false
         }"#;
         let err = serde_json::from_str::<Req>(json).unwrap_err();
         let tst = format!("{}", err);
-        let eta = r#"unknown field `proxy`, expected one of `method`, `url`, `timeout`, `no_proxy` at line 4 column 19"#.to_owned();
+        let eta = r#"unknown field `proxy`, expected one of `reply_to`, `method`, `url`, `timeout`, `no_proxy` at line 4 column 19"#.to_owned();
         assert_eq!(tst, eta); 
 
         Ok(())
