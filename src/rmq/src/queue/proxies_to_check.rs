@@ -3,6 +3,7 @@
 use log::{error, warn, info, debug, trace};
 #[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
+
 use lapin::{
     options::{
         BasicAckOptions, 
@@ -55,8 +56,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     let _queue = get_queue(&channel, queue_name.as_ref()).await?;
     let mut consumer = basic_consume(&channel, queue_name.as_ref(), consumer_tag.as_ref()).await?;
     println!("{} connected, waiting for messages", consumer_tag.as_ref());
-    // let mut url_proxies: Vec<reqwest::Proxy> = Vec::new();
-    // let mut delay: Option<tokio::time::Delay> = None;
+
     let mut fut_queue = FuturesUnordered::new();
     let mut own_ip_opt: Option<OwnIp> = None;
     loop {
@@ -64,22 +64,6 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
         pin_mut!(next_fut);
         let mut consumer_next_fut = next_fut;
         select! {
-            ret = fut_queue.select_next_some() => {
-                match ret {
-                    Err(_) => unreachable!(),
-                    Ok(ret) => {
-                        match ret {
-                            OpRet::Check(check::Ret{line}) => {
-                                if let Some(line) = line {
-                                    let queue_name = "proxies_to_use";
-                                    let _queue = get_queue(&channel, queue_name).await?;
-                                    basic_publish(&channel, queue_name, line).await?;
-                                }
-                            },
-                        }
-                    }
-                }
-            },
             consumer_next_opt = consumer_next_fut => {
                 if let Some(consumer_next) = consumer_next_opt {
                     if let Ok((channel, delivery)) = consumer_next {
@@ -115,6 +99,22 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                         let next_fut = consumer.next().fuse();
                         pin_mut!(next_fut);
                         consumer_next_fut = next_fut;
+                    }
+                }
+            },
+            ret = fut_queue.select_next_some() => {
+                match ret {
+                    Err(_) => unreachable!(),
+                    Ok(ret) => {
+                        match ret {
+                            OpRet::Check(check::Ret{line}) => {
+                                if let Some(line) = line {
+                                    let queue_name = "proxies_to_use";
+                                    let _queue = get_queue(&channel, queue_name).await?;
+                                    basic_publish(&channel, queue_name, line).await?;
+                                }
+                            },
+                        }
                     }
                 }
             },
@@ -158,7 +158,7 @@ mod check {
     pub struct Ret {
         pub line: Option<String>,
     }
-                                    // fut_queue.push(check(CheckArg {client, line, own_ip.unwrap().ip}));
+
     pub async fn run(arg: Arg) -> Result<Ret> {
         let line = match super::get_ip(arg.client).await {
             Err(_) => None,

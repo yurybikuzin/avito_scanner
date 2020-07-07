@@ -17,7 +17,6 @@ pub async fn health() -> WebResult<impl Reply> {
 }
 
 pub async fn req(req: Req, pool: Pool) -> WebResult<impl Reply> {
-    info!("got: {}", serde_json::to_string_pretty(&req).unwrap());
     let payload = serde_json::to_string_pretty(&req).unwrap();
     let rmq_conn = rmq::get_conn(pool).await.map_err(|e| {
         eprintln!("can't connect to rmq, {}", e);

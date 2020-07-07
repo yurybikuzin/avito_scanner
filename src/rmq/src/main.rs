@@ -1,4 +1,4 @@
-#![recursion_limit="512"]
+#![recursion_limit="2048"]
 
 #[allow(unused_imports)]
 use log::{error, warn, info, debug, trace};
