@@ -28,17 +28,25 @@ pub struct OwnIp {
     ip: String,
     last_update: Instant,
 }
-const PROXY_TIMEOUT: u64 = 10;//secs
-const OWN_IP_FRESH_DURATION: u64 = 30;//secs
+const PROXY_TIMEOUT: u64 = 20;//secs
+const OWN_IP_FRESH_DURATION: u64 = 10;//secs
+const SAME_TIME_PROXY_CHECK_MAX: usize = 20;
 
 use futures::{
-    future::FutureExt, // for `.fuse()`
+    future::{
+        Fuse, 
+        // FusedFuture,
+        FutureExt,// for `.fuse()`
+    }, 
     select,
     pin_mut,
     stream::{
         FuturesUnordered,
     },
+    // channel::mpsc,
 };
+
+use super::*;
 async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queue_name: S2) -> Result<()> {
     let conn = get_conn(pool).await.map_err(|e| {
         eprintln!("could not get rmq conn: {}", e);
@@ -51,19 +59,33 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
 
     let mut fut_queue = FuturesUnordered::new();
     let mut own_ip_opt: Option<OwnIp> = None;
+
+    // let (sender, mut stream) = mpsc::unbounded();
     loop {
-        let next_fut = consumer.next().fuse();
-        pin_mut!(next_fut);
-        let mut consumer_next_fut = next_fut;
+        let consumer_next_fut = if fut_queue.len() < SAME_TIME_PROXY_CHECK_MAX {
+            consumer.next().fuse()
+        } else {
+            Fuse::terminated()
+        };
+        let consumer_timeout_fut = if fut_queue.len() < SAME_TIME_PROXY_CHECK_MAX && STATE_PROXIES_TO_CHECK.load(Ordering::Relaxed) == STATE_PROXIES_TO_CHECK_FILLED {
+            tokio::time::delay_for(std::time::Duration::from_secs(5)).fuse()
+        } else {
+            Fuse::terminated()
+        };
+        pin_mut!(consumer_timeout_fut);
+        pin_mut!(consumer_next_fut);
         select! {
+            ret = consumer_timeout_fut => {
+                STATE_PROXIES_TO_CHECK.store(STATE_PROXIES_TO_CHECK_NONE, Ordering::Relaxed);
+            },
             consumer_next_opt = consumer_next_fut => {
                 if let Some(consumer_next) = consumer_next_opt {
                     if let Ok((channel, delivery)) = consumer_next {
                         let line = std::str::from_utf8(&delivery.data).unwrap();
                         let url_proxy = format!("http://{}", line);
-
                         match reqwest::Proxy::all(&url_proxy) {
                             Err(_err) => {
+                                basic_ack(&channel, delivery.delivery_tag).await?;
                             },
                             Ok(url_proxy) => {
                                 let own_ip = match own_ip_opt {
@@ -81,15 +103,21 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                     .timeout(Duration::from_secs(PROXY_TIMEOUT))
                                     .build()?
                                 ;
-                                fut_queue.push(op(OpArg::Check(check::Arg {client, line: line.to_owned(), own_ip: own_ip.ip.to_owned()})));
+                                fut_queue.push(op(OpArg::Check(check::Arg {
+                                    client, 
+                                    line: line.to_owned(), 
+                                    own_ip: own_ip.ip.to_owned(),
+                                    delivery_tag: delivery.delivery_tag,
+                                })));
+                                STATE_PROXIES_TO_USE.store(STATE_PROXIES_TO_USE_FILLED, Ordering::Relaxed);
                                 own_ip_opt = Some(own_ip);
                             },
                         };
-                        basic_ack(&channel, delivery.delivery_tag).await?;
-                        let next_fut = consumer.next().fuse();
-                        pin_mut!(next_fut);
-                        consumer_next_fut = next_fut;
+                    } else {
+                        error!("Err(err) = consumer_next");
                     }
+                } else {
+                    error!("consumer_next_opt.is_none()");
                 }
             },
             ret = fut_queue.select_next_some() => {
@@ -97,20 +125,25 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                     Err(_) => unreachable!(),
                     Ok(ret) => {
                         match ret {
-                            OpRet::Check(check::Ret{line}) => {
+                            OpRet::Check(check::Ret{line, delivery_tag}) => {
                                 if let Some(line) = line {
                                     let queue_name = "proxies_to_use";
                                     let _queue = get_queue(&channel, queue_name).await?;
                                     basic_publish(&channel, queue_name, line).await?;
                                 }
+                                basic_ack(&channel, delivery_tag).await?;
                             },
                         }
                     }
                 }
             },
+            // () = stream.select_next_some() => { 
+            //     error!("unreachable stream.select_next_some");
+            // },
             complete => {
+                error!("unreachable complete");
                 break;
-            },
+            }
         }
     }
     Ok(())
@@ -143,10 +176,12 @@ mod check {
         pub client: reqwest::Client,
         pub line: String,
         pub own_ip: String,
+        pub delivery_tag: amq_protocol_types::LongLongUInt,
     }
 
     pub struct Ret {
         pub line: Option<String>,
+        pub delivery_tag: amq_protocol_types::LongLongUInt,
     }
 
     pub async fn run(arg: Arg) -> Result<Ret> {
@@ -160,7 +195,10 @@ mod check {
                 }
             },
         };
-        Ok(Ret{line})
+        Ok(Ret{
+            line,
+            delivery_tag: arg.delivery_tag,
+        })
     }
 }
 

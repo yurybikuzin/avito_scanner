@@ -4,12 +4,13 @@ use log::{error, warn, info, debug, trace};
 #[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
 
-use lapin::{
-    Consumer,
-    options::{
-        BasicRejectOptions,
-    }, 
-};
+use std::collections::VecDeque;
+// use lapin::{
+//     // Consumer,
+//     // options::{
+//     //     BasicRejectOptions,
+//     // }, 
+// };
 use std::time::Duration;
 use futures::{StreamExt};
 use super::super::rmq::{
@@ -19,7 +20,7 @@ use super::super::rmq::{
     basic_consume, 
     basic_publish, 
     basic_ack,
-    basic_reject,
+    // basic_reject,
 };
 
 pub async fn process(pool: Pool) -> Result<()> {
@@ -35,13 +36,18 @@ pub async fn process(pool: Pool) -> Result<()> {
         };
     }
 }
-const RESPONSE_TIMEOUT: u64 = 5; //secs
-const PROXY_REST_DURATION: u64 = 500; //millis
+
+const RESPONSE_TIMEOUT: u64 = 10; //secs
+const PROXY_REST_DURATION: u64 = 1000; //millis
+// const FETCH_PROXIES_AFTER_DURATION: u64 = 5; //secs
 use super::super::req::Req;
 use super::super::res::Res;
 
 use futures::{
-    future::FutureExt, // for `.fuse()`
+    future::{
+        Fuse,
+        FutureExt, // for `.fuse()`
+    },
     select,
     pin_mut,
     stream::{
@@ -56,6 +62,9 @@ struct ProxyError {
     msg: String,
 }
 
+use super::*;
+const SAME_TIME_REQUEST_MAX: usize = 20;
+
 async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queue_name: S2) -> Result<()> {
     let conn = get_conn(pool).await.map_err(|e| {
         eprintln!("could not get rmq conn: {}", e);
@@ -63,85 +72,96 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     })?;
     let channel = conn.create_channel().await?;
     let _queue = get_queue(&channel, queue_name.as_ref()).await?;
-    let mut consumer = basic_consume(&channel, queue_name.as_ref(), consumer_tag.as_ref()).await?;
-    let mut consumer_proxies_to_use_opt: Option<Consumer> = None;
+    let mut consumer_request = basic_consume(&channel, queue_name.as_ref(), consumer_tag.as_ref()).await?;
+
+    let mut consumer_proxies_to_use = {
+        let queue_name = "proxies_to_use";
+        let consumer_tag = "consumer_proxies_to_use";
+        let _queue = get_queue(&channel, queue_name).await?;
+        basic_consume(&channel, queue_name, consumer_tag).await?
+    };
+
+    // let mut consumer_proxies_to_use_opt: Option<Consumer> = None;
+    //
     println!("{} connected, waiting for messages", consumer_tag.as_ref());
     let mut fut_queue = FuturesUnordered::new();
+    let mut reqs: VecDeque<(Req, amq_protocol_types::LongLongUInt)> = VecDeque::new();
+    let mut lines: VecDeque<(String, amq_protocol_types::LongLongUInt)> = VecDeque::new();
     loop {
-        let next_fut = consumer.next().fuse();
-        pin_mut!(next_fut);
-        let mut consumer_next_fut = next_fut;
-        select! {
-            consumer_next_opt = consumer_next_fut => {
-                if let Some(consumer_next) = consumer_next_opt {
-                    if let Ok((channel, delivery)) = consumer_next {
-                        let s = std::str::from_utf8(&delivery.data).unwrap();
-                        let req: Req = serde_json::from_str(&s).unwrap();
-                        let delivery_tag_req = delivery.delivery_tag;
-                        let no_proxy = req.no_proxy.unwrap_or(false); 
-                        if no_proxy {
-                            let client = reqwest::Client::builder()
-                                .timeout(
-                                    req.timeout.unwrap_or(
-                                        Duration::from_secs(RESPONSE_TIMEOUT)
-                                    )
-                                )
-                                .build()?
-                            ;
-                            fut_queue.push(op(OpArg::Fetch(fetch::Arg {
-                                client, 
-                                opt: fetch::Opt {
-                                    req,
-                                    delivery_tag_req,
-                                    kind: fetch::Kind::NoProxy,
-                                },
-                            })));
-                        } else {
-                            let mut consumer_proxies_to_use = match consumer_proxies_to_use_opt {
-                                Some(consumer_proxies_to_use) => consumer_proxies_to_use,
-                                None => {
-                                    let queue_name = "proxies_to_use";
-                                    let consumer_tag = "consumer_proxies_to_use";
-                                    basic_consume(&channel, queue_name, consumer_tag).await?
-                                },
-                            };
-                            if let Some(consumer_proxies_to_use_next) = consumer_proxies_to_use.next().await {
-
-                                if let Ok((channel, delivery)) = consumer_proxies_to_use_next {
-
-                                    let line = std::str::from_utf8(&delivery.data).unwrap();
-                                    trace!("line: {}, url: {}", line, req.url);
-                                    let url_proxy = format!("http://{}", line);
-                                    let url_proxy = reqwest::Proxy::all(&url_proxy).unwrap();
-                                    let client = reqwest::Client::builder()
-                                        .proxy(url_proxy)
-                                        .timeout(
-                                            req.timeout.unwrap_or(
-                                                Duration::from_secs(RESPONSE_TIMEOUT)
-                                            )
-                                        )
-                                        .build()?
-                                    ;
-                                    let delivery_tag_proxy = delivery.delivery_tag;
-                                    fut_queue.push(op(OpArg::Fetch(fetch::Arg {
-                                        client, 
-                                        opt: fetch::Opt {
-                                            req,
-                                            delivery_tag_req,
-                                            kind: fetch::Kind::Proxy {
-                                                delivery_tag_proxy,
-                                                line: line.to_owned(),
-                                            },
-                                        },
-                                    })));
-
-                                }
-                            }
-                            consumer_proxies_to_use_opt = Some(consumer_proxies_to_use);
-                        }
-                    }
-                }
+        if reqs.len() > 0 && lines.len() > 0 {
+            let (line, delivery_tag_proxy) = lines.pop_front().unwrap();
+            let (req, delivery_tag_req) = reqs.pop_front().unwrap();
+            let no_proxy = req.no_proxy.unwrap_or(false); 
+            if no_proxy {
+                let client = reqwest::Client::builder()
+                    .timeout(
+                        req.timeout.unwrap_or(
+                            Duration::from_secs(RESPONSE_TIMEOUT)
+                        )
+                    )
+                    .build()?
+                ;
+                fut_queue.push(op(OpArg::Fetch(fetch::Arg {
+                    client, 
+                    opt: fetch::Opt {
+                        req,
+                        delivery_tag_req,
+                        kind: fetch::Kind::NoProxy,
+                    },
+                })));
+            } else {
+                let url_proxy = format!("http://{}", line);
+                let url_proxy = reqwest::Proxy::all(&url_proxy).unwrap();
+                let client = reqwest::Client::builder()
+                    .proxy(url_proxy)
+                    .timeout(
+                        req.timeout.unwrap_or(
+                            Duration::from_secs(RESPONSE_TIMEOUT)
+                        )
+                    )
+                    .build()?
+                ;
+                trace!("took {} for {}", line, req.url);
+                fut_queue.push(op(OpArg::Fetch(fetch::Arg {
+                    client, 
+                    opt: fetch::Opt {
+                        req,
+                        delivery_tag_req,
+                        kind: fetch::Kind::Proxy {
+                            delivery_tag_proxy,
+                            line: line.to_owned(),
+                        },
+                    },
+                })));
             }
+        }
+
+        let consumer_request_next_fut = if fut_queue.len() < SAME_TIME_REQUEST_MAX {
+            consumer_request.next().fuse()
+        } else {
+            Fuse::terminated()
+        };
+        pin_mut!(consumer_request_next_fut);
+
+        let consumer_proxies_to_use_next_fut = if lines.len() < reqs.len() {
+            super::cmd::fetch_proxies(&channel).await?;
+            consumer_proxies_to_use.next().fuse()
+        } else {
+            Fuse::terminated()
+        };
+        pin_mut!(consumer_proxies_to_use_next_fut);
+
+        let consumer_timeout_fut = if lines.len() < reqs.len() && STATE_PROXIES_TO_USE.load(Ordering::Relaxed) == STATE_PROXIES_TO_USE_FILLED {
+            tokio::time::delay_for(std::time::Duration::from_secs(5)).fuse()
+        } else {
+            Fuse::terminated()
+        };
+        pin_mut!(consumer_timeout_fut);
+
+        select! {
+            ret = consumer_timeout_fut => {
+                STATE_PROXIES_TO_USE.store(STATE_PROXIES_TO_USE_NONE, Ordering::Relaxed);
+            },
             ret = fut_queue.select_next_some() => {
                 match ret {
                     Err(_) => {
@@ -149,6 +169,11 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                     },
                     Ok(ret) => {
                         match ret {
+                            OpRet::ReuseProxy(ret) => {
+                                let reuse_proxy::Ret { line, delivery_tag } = ret;
+                                info!("{} to be reused", line);
+                                lines.push_front((line, delivery_tag));
+                            },
                             OpRet::Fetch(ret) => {
                                 let fetch::Ret{ret, opt} = ret;
                                 let fetch::Opt { req, delivery_tag_req, kind } = opt;
@@ -156,21 +181,22 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                     fetch::RequestRet::Err(err) => {
                                         match kind {
                                             fetch::Kind::NoProxy => {
-                                                if err.is_timeout() {
-                                                    warn!("is_timeout: {}", err);
-                                                } else if err.is_builder() {
-                                                    error!("is_builder: {}", err);
-                                                    std::process::exit(1);
-                                                } else if err.is_status() {
-                                                    error!("is_status: {}, status: {:?}", err, err.status());
-                                                    std::process::exit(1);
-                                                } else if err.is_redirect() {
-                                                    error!("is_redirect: {}, url: {:?}", err, err.url());
-                                                    std::process::exit(1);
-                                                } else {
-                                                    error!("other: {:?}", err);
-                                                    std::process::exit(1);
-                                                }
+                                                todo!();
+                                                // if err.is_timeout() {
+                                                //     warn!("is_timeout: {}", err);
+                                                // } else if err.is_builder() {
+                                                //     error!("is_builder: {}", err);
+                                                //     std::process::exit(1);
+                                                // } else if err.is_status() {
+                                                //     error!("is_status: {}, status: {:?}", err, err.status());
+                                                //     std::process::exit(1);
+                                                // } else if err.is_redirect() {
+                                                //     error!("is_redirect: {}, url: {:?}", err, err.url());
+                                                //     std::process::exit(1);
+                                                // } else {
+                                                //     error!("other: {:?}", err);
+                                                //     std::process::exit(1);
+                                                // }
                                             },
                                             fetch::Kind::Proxy { delivery_tag_proxy, line } => {
                                                 let (queue_name, msg) =  if err.is_timeout() {
@@ -185,60 +211,65 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                                     ("proxies_error_other", format!("other({}): {}", line, err))
                                                 };
                                                 warn!("{}: {}", line, msg);
-                                                basic_ack(&channel, delivery_tag_proxy).await?;
                                                 let _queue = get_queue(&channel, queue_name).await?;
                                                 let proxy_error = ProxyError{line, msg};
                                                 let payload = serde_json::to_string_pretty(&proxy_error)?;
                                                 basic_publish(&channel, queue_name, payload).await?;
-                                                basic_reject(&channel, delivery_tag_req).await?;
+                                                basic_ack(&channel, delivery_tag_proxy).await?;
+                                                reqs.push_front((req, delivery_tag_req));
                                             },
                                         }
                                     },
                                     fetch::RequestRet::Ok{url, text, status} => {
                                         match kind {
                                             fetch::Kind::NoProxy => {
+                                                todo!();
+                                                // let url_res = url;
+                                                // info!("{}: {}", req.url, status);
+                                                // let res = Res {
+                                                //     url_req: req.url,
+                                                //     url_res,
+                                                //     status,
+                                                //     text,
+                                                // };
+                                                //
+                                                // let queue_name: &str = req.reply_to.as_ref();
+                                                // let _queue = get_queue(&channel, queue_name).await?;
+                                                // basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
+                                                //
+                                                // basic_ack(&channel, delivery_tag_req).await?;
+                                            },
+
+                                            fetch::Kind::Proxy { line, delivery_tag_proxy }=> {
                                                 let url_res = url;
-                                                info!("{}: {}", req.url, status);
+                                                info!("{}: {}: {}", line, req.url, status);
                                                 let res = Res {
-                                                    url_req: req.url,
+                                                    url_req: req.url.clone(),
                                                     url_res,
                                                     status,
                                                     text,
                                                 };
+                                                match status {
+                                                    http::StatusCode::OK => {
 
-                                                let queue_name: &str = req.reply_to.as_ref();
-                                                let _queue = get_queue(&channel, queue_name).await?;
-                                                basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
+                                                        let queue_name: &str = req.reply_to.as_ref();
+                                                        let _queue = get_queue(&channel, queue_name).await?;
+                                                        basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
 
-                                                basic_ack(&channel, delivery_tag_req).await?;
-                                            },
-                                            fetch::Kind::Proxy { line, delivery_tag_proxy }=> {
-                                                if status == http::StatusCode::FORBIDDEN {
-                                                    warn!("{}: forbidden", line);
-                                                    basic_ack(&channel, delivery_tag_proxy).await?;
-                                                    let queue_name = "proxies_forbidden";
-                                                    let _queue = get_queue(&channel, queue_name).await?;
-                                                    basic_publish(&channel, queue_name, line).await?;
-                                                    basic_reject(&channel, delivery_tag_req).await?;
-                                                } else {
-                                                    let url_res = url;
-                                                    info!("{}: {}", req.url, status);
-                                                    let res = Res {
-                                                        url_req: req.url,
-                                                        url_res,
-                                                        status,
-                                                        text,
-                                                    };
-
-                                                    let queue_name: &str = req.reply_to.as_ref();
-                                                    let _queue = get_queue(&channel, queue_name).await?;
-                                                    basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
-
-                                                    basic_ack(&channel, delivery_tag_req).await?;
-                                                    tokio::time::delay_for(Duration::from_millis(PROXY_REST_DURATION)).await;
-
-                                                    info!("line: {}", line);
-                                                    channel.basic_reject(delivery_tag_proxy, BasicRejectOptions{ requeue: true }).await?;
+                                                        basic_ack(&channel, delivery_tag_req).await?;
+                                                        fut_queue.push(op(OpArg::ReuseProxy(reuse_proxy::Arg {
+                                                            line,
+                                                            delivery_tag: delivery_tag_proxy,
+                                                        })));
+                                                    },
+                                                    _ => {
+                                                        warn!("{}: {:?}", line, status);
+                                                        let queue_name = format!("proxies_status_{:?}", status);
+                                                        let _queue = get_queue(&channel, queue_name.as_str(),).await?;
+                                                        basic_publish(&channel, queue_name.as_str(), line).await?;
+                                                        basic_ack(&channel, delivery_tag_proxy).await?;
+                                                        reqs.push_front((req, delivery_tag_req));
+                                                    },
                                                 }
                                             },
                                         }
@@ -249,7 +280,36 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                     },
                 }
             },
+            consumer_proxies_to_use_next_opt = consumer_proxies_to_use_next_fut => {
+                if let Some(consumer_proxies_to_use_next) = consumer_proxies_to_use_next_opt {
+                    if let Ok((channel, delivery)) = consumer_proxies_to_use_next {
+                        let line = std::str::from_utf8(&delivery.data).unwrap();
+                        let url_proxy = format!("http://{}", line);
+                        if let Ok(_url_proxy) = reqwest::Proxy::all(&url_proxy) {
+                            lines.push_back((line.to_owned(), delivery.delivery_tag));
+                        }
+                    } else {
+                        error!("Err(err) = consumer_proxies_to_use_next");
+                    }
+                } else {
+                    error!("consumer_proxies_to_use_next_opt.is_none()");
+                }
+            },
+            consumer_request_next_opt = consumer_request_next_fut => {
+                if let Some(consumer_request_next) = consumer_request_next_opt {
+                    if let Ok((channel, delivery)) = consumer_request_next {
+                        let s = std::str::from_utf8(&delivery.data).unwrap();
+                        let req: Req = serde_json::from_str(&s).unwrap();
+                        reqs.push_back((req, delivery.delivery_tag));
+                    } else {
+                        error!("Err(err) = consumer_request_next");
+                    }
+                } else {
+                    error!("consumer_request_next_opt.is_none()");
+                }
+            },
             complete => {
+                error!("complete: unreachable!");
                 break;
             },
         }
@@ -259,10 +319,12 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
 
 enum OpArg {
     Fetch(fetch::Arg),
+    ReuseProxy(reuse_proxy::Arg),
 }
 
 enum OpRet {
     Fetch(fetch::Ret),
+    ReuseProxy(reuse_proxy::Ret),
 }
 
 async fn op(arg: OpArg) -> Result<OpRet> {
@@ -271,6 +333,36 @@ async fn op(arg: OpArg) -> Result<OpRet> {
             let ret = fetch::run(arg).await?;
             Ok(OpRet::Fetch(ret))
         },
+        OpArg::ReuseProxy(arg) => {
+            let ret = reuse_proxy::run(arg).await?;
+            Ok(OpRet::ReuseProxy(ret))
+        },
+    }
+}
+
+mod reuse_proxy {
+    #[allow(unused_imports)]
+    use log::{error, warn, info, debug, trace};
+    #[allow(unused_imports)]
+    use anyhow::{anyhow, bail, Result, Error, Context};
+
+    pub struct Arg {
+        pub line: String,
+        pub delivery_tag: amq_protocol_types::LongLongUInt,
+    }
+
+    pub struct Ret {
+        pub line: String,
+        pub delivery_tag: amq_protocol_types::LongLongUInt,
+    }
+
+    use std::time::Duration;
+    pub async fn run(arg: Arg) -> Result<Ret> {
+        tokio::time::delay_for(Duration::from_millis(super::PROXY_REST_DURATION)).await;
+        Ok(Ret {
+            line: arg.line,
+            delivery_tag: arg.delivery_tag,
+        })
     }
 }
 

@@ -33,9 +33,9 @@ async fn main() -> Result<()> {
     println!("Started server at localhost:{}", port);
     let _ = join!(
         warp::serve(routes).run(([0, 0, 0, 0], port)),
-        queue::request::process(pool.clone()),
         queue::cmd::process(pool.clone()),
         queue::proxies_to_check::process(pool.clone()),
+        queue::request::process(pool.clone()),
     );
     Ok(())
 }

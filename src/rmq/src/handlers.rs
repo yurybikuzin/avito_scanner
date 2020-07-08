@@ -6,7 +6,10 @@ use anyhow::{anyhow, bail, Result, Error, Context};
 use super::req::Req;
 use warp::{Rejection, Reply};
 use super::rmq::{self, Pool};
-use lapin::{ Queue, Channel };
+use lapin::{ 
+    // Queue, 
+    Channel, 
+};
 type WebResult<T> = std::result::Result<T, Rejection>;
 use super::error::{self};
 
@@ -28,16 +31,16 @@ pub async fn req(req: Req, pool: Pool) -> WebResult<impl Reply> {
         warp::reject::custom(error::Error::RMQError(Error::new(e)))
     })?;
 
-    let queue = get_queue(&channel, "proxies_to_use").await?;
-    if queue.message_count() == 0 {
-        let queue = get_queue(&channel, "proxies_to_check").await?;
-        if queue.message_count() == 0 {
-            let queue = get_queue(&channel, "cmd").await?;
-            if queue.message_count() == 0 {
-                basic_publish(&channel, "cmd", "fetch_proxies").await?;
-            }
-        }
-    }
+    // let queue = get_queue(&channel, "proxies_to_use").await?;
+    // if queue.message_count() == 0 {
+    //     let queue = get_queue(&channel, "proxies_to_check").await?;
+    //     if queue.message_count() == 0 {
+    //         let queue = get_queue(&channel, "cmd").await?;
+    //         if queue.message_count() == 0 {
+    //             basic_publish(&channel, "cmd", "fetch_proxies").await?;
+    //         }
+    //     }
+    // }
     basic_publish(&channel, "request", payload).await?;
     Ok("OK")
 }
@@ -51,11 +54,11 @@ async fn basic_publish<S: AsRef<str>, S2: AsRef<str>>(channel: &Channel, queue_n
     Ok(())
 }
 
-async fn get_queue<S: AsRef<str>>(channel: &Channel, queue_name: S) -> WebResult<Queue> {
-    rmq::get_queue(channel, queue_name.as_ref()).await
-        .map_err(|e| {
-            eprintln!("queue_declare'{}': {}", queue_name.as_ref(), e);
-            warp::reject::custom(error::Error::RMQError(e))
-        })
-}
+// async fn get_queue<S: AsRef<str>>(channel: &Channel, queue_name: S) -> WebResult<Queue> {
+//     rmq::get_queue(channel, queue_name.as_ref()).await
+//         .map_err(|e| {
+//             eprintln!("queue_declare'{}': {}", queue_name.as_ref(), e);
+//             warp::reject::custom(error::Error::RMQError(e))
+//         })
+// }
 

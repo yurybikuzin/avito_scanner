@@ -4,13 +4,14 @@ use log::{error, warn, info, debug, trace};
 #[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
 
-// use lapin::{
+use lapin::{
+    Channel,
 //     options::{
 //         BasicAckOptions, 
 //         // BasicRejectOptions,
 //         // BasicNackOptions,
 //     }, 
-// };
+};
 use std::time::Duration;
 use futures::{StreamExt};
 use super::super::rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish, basic_ack};
@@ -37,6 +38,23 @@ struct CmdError<'a> {
     msg: String,
 }
 
+use super::*;
+
+pub async fn fetch_proxies(channel: &Channel) -> Result<()> {
+    if 
+        STATE_PROXIES_TO_CHECK.load(Ordering::Relaxed) == STATE_PROXIES_TO_CHECK_NONE ||
+        STATE_PROXIES_TO_USE.load(Ordering::Relaxed) == STATE_PROXIES_TO_USE_NONE ||
+        false
+    {
+        let queue_name = "cmd";
+        let _queue = get_queue(channel, queue_name).await?;
+        basic_publish(channel, queue_name, "fetch_proxies").await?;
+    } else {
+        trace!("cmd fetch_proxies ignored due to STATE_PROXIES_TO_CHECK/USE is not NONE");
+    }
+    Ok(())
+}
+
 async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queue_name: S2) -> Result<()> {
     let conn = get_conn(pool).await.map_err(|e| {
         eprintln!("could not get rmq conn: {}", e);
@@ -52,16 +70,28 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
             let cmd = std::str::from_utf8(&delivery.data).unwrap();
             match cmd {
                 "fetch_proxies" => {
-                    let body = reqwest::get("http://rootjazz.com/proxies/proxies.txt")
-                        .await?
-                        .text()
-                        .await?
-                    ;
-                    let lines = body.lines().map(|s| s.to_owned()).collect::<Vec<String>>();
-                    let queue_name = "proxies_to_check";
-                    let _queue = get_queue(&channel, queue_name).await?;
-                    for line in lines {
-                        basic_publish(&channel, queue_name, line).await?;
+                    if STATE_PROXIES_TO_CHECK.load(Ordering::Relaxed) == STATE_PROXIES_TO_CHECK_NONE {
+                        STATE_PROXIES_TO_CHECK.store(STATE_PROXIES_TO_CHECK_STARTED, Ordering::Relaxed);
+                        let queue_name = "proxies_to_check";
+
+                        let body = reqwest::get("http://rootjazz.com/proxies/proxies.txt")
+                            .await?
+                            .text()
+                            .await?
+                        ;
+                        let lines = body.lines().map(|s| s.to_owned()).collect::<Vec<String>>();
+                        for line in lines {
+                            let url_proxy = format!("http://{}", line);
+                            if let Ok(_url_proxy) = reqwest::Proxy::all(&url_proxy) {
+                                basic_publish(&channel, queue_name, line).await?;
+                                STATE_PROXIES_TO_CHECK.store(STATE_PROXIES_TO_CHECK_FILLED, Ordering::Relaxed);
+                            }
+                        }
+                        if STATE_PROXIES_TO_CHECK.load(Ordering::Relaxed) == STATE_PROXIES_TO_CHECK_STARTED {
+                            STATE_PROXIES_TO_CHECK.store(STATE_PROXIES_TO_CHECK_NONE, Ordering::Relaxed);
+                        }
+                    } else {
+                        trace!("cmd fetch_proxies ignored due to STATE_PROXIES_TO_CHECK/USE is not NONE");
                     }
                 },
                 _ => {

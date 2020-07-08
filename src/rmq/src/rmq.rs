@@ -7,7 +7,7 @@ use lapin::{
         BasicConsumeOptions, 
         BasicPublishOptions, 
         BasicAckOptions, 
-        BasicRejectOptions,
+        // BasicRejectOptions,
     }, 
     types::FieldTable, 
     ConnectionProperties,
@@ -78,9 +78,9 @@ pub async fn basic_ack(channel: &Channel, delivery_tag: amq_protocol_types::Long
     Ok(())
 }
 
-pub async fn basic_reject(channel: &Channel, delivery_tag: amq_protocol_types::LongLongUInt) -> Result<()> {
-    channel.basic_reject(delivery_tag, BasicRejectOptions{ requeue: true }).await?;
-    Ok(())
-}
+// pub async fn basic_reject(channel: &Channel, delivery_tag: amq_protocol_types::LongLongUInt) -> Result<()> {
+//     channel.basic_reject(delivery_tag, BasicRejectOptions{ requeue: true }).await?;
+//     Ok(())
+// }
 
 
