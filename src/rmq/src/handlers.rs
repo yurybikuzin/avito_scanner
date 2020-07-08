@@ -32,9 +32,9 @@ pub async fn req(req: Req, pool: Pool) -> WebResult<impl Reply> {
     if queue.message_count() == 0 {
         let queue = get_queue(&channel, "proxies_to_check").await?;
         if queue.message_count() == 0 {
-            let queue = get_queue(&channel, "fetch_proxies").await?;
+            let queue = get_queue(&channel, "cmd").await?;
             if queue.message_count() == 0 {
-                basic_publish(&channel, "fetch_proxies", "").await?;
+                basic_publish(&channel, "cmd", "fetch_proxies").await?;
             }
         }
     }

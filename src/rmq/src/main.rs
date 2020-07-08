@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     let _ = join!(
         warp::serve(routes).run(([0, 0, 0, 0], port)),
         queue::request::process(pool.clone()),
-        queue::fetch_proxies::process(pool.clone()),
+        queue::cmd::process(pool.clone()),
         queue::proxies_to_check::process(pool.clone()),
     );
     Ok(())

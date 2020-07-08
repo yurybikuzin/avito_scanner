@@ -4,16 +4,9 @@ use log::{error, warn, info, debug, trace};
 #[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
 
-use lapin::{
-    options::{
-        BasicAckOptions, 
-        // BasicRejectOptions,
-        // BasicNackOptions,
-    }, 
-};
 use std::time::Duration;
 use futures::{StreamExt};
-use super::super::rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish };
+use super::super::rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish, basic_ack};
 use json::{Json, By};
 
 pub async fn process(pool: Pool) -> Result<()> {
@@ -43,7 +36,6 @@ use futures::{
     select,
     pin_mut,
     stream::{
-        // StreamExt,
         FuturesUnordered,
     },
 };
@@ -93,9 +85,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                 own_ip_opt = Some(own_ip);
                             },
                         };
-                        channel
-                            .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-                            .await?;
+                        basic_ack(&channel, delivery.delivery_tag).await?;
                         let next_fut = consumer.next().fuse();
                         pin_mut!(next_fut);
                         consumer_next_fut = next_fut;

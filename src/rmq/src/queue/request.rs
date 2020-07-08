@@ -7,14 +7,20 @@ use anyhow::{anyhow, bail, Result, Error, Context};
 use lapin::{
     Consumer,
     options::{
-        BasicAckOptions, 
         BasicRejectOptions,
-        // BasicNackOptions,
     }, 
 };
 use std::time::Duration;
 use futures::{StreamExt};
-use super::super::rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish };
+use super::super::rmq::{
+    get_conn, 
+    get_queue, 
+    Pool, 
+    basic_consume, 
+    basic_publish, 
+    basic_ack,
+    basic_reject,
+};
 
 pub async fn process(pool: Pool) -> Result<()> {
     let mut retry_interval = tokio::time::interval(Duration::from_secs(5));
@@ -39,7 +45,6 @@ use futures::{
     select,
     pin_mut,
     stream::{
-        // StreamExt,
         FuturesUnordered,
     },
 };
@@ -61,7 +66,6 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     let mut consumer = basic_consume(&channel, queue_name.as_ref(), consumer_tag.as_ref()).await?;
     let mut consumer_proxies_to_use_opt: Option<Consumer> = None;
     println!("{} connected, waiting for messages", consumer_tag.as_ref());
-    // while let Some(consumer_next) = consumer.next().await {
     let mut fut_queue = FuturesUnordered::new();
     loop {
         let next_fut = consumer.next().fuse();
@@ -73,7 +77,6 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                     if let Ok((channel, delivery)) = consumer_next {
                         let s = std::str::from_utf8(&delivery.data).unwrap();
                         let req: Req = serde_json::from_str(&s).unwrap();
-                        // info!("got: {}", serde_json::to_string_pretty(&req).unwrap());
                         let delivery_tag_req = delivery.delivery_tag;
                         let no_proxy = req.no_proxy.unwrap_or(false); 
                         if no_proxy {
@@ -182,48 +185,47 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                                     ("proxies_error_other", format!("other({}): {}", line, err))
                                                 };
                                                 warn!("{}: {}", line, msg);
-                                                channel.basic_ack(delivery_tag_proxy, BasicAckOptions::default()).await?;
+                                                basic_ack(&channel, delivery_tag_proxy).await?;
                                                 let _queue = get_queue(&channel, queue_name).await?;
                                                 let proxy_error = ProxyError{line, msg};
                                                 let payload = serde_json::to_string_pretty(&proxy_error)?;
                                                 basic_publish(&channel, queue_name, payload).await?;
-                                                channel.basic_reject(delivery_tag_req, BasicRejectOptions{ requeue: true }).await?;
+                                                basic_reject(&channel, delivery_tag_req).await?;
                                             },
                                         }
                                     },
-                                    fetch::RequestRet::Ok(response) => {
+                                    fetch::RequestRet::Ok{url, text, status} => {
                                         match kind {
                                             fetch::Kind::NoProxy => {
-                                                let status = response.status();
-                                                    let text = response.text().await?;
-                                                    info!("{}: {}", req.url, status);
-                                                    let res = Res {
-                                                        status,
-                                                        text,
-                                                    };
+                                                let url_res = url;
+                                                info!("{}: {}", req.url, status);
+                                                let res = Res {
+                                                    url_req: req.url,
+                                                    url_res,
+                                                    status,
+                                                    text,
+                                                };
 
-                                                    let queue_name: &str = req.reply_to.as_ref();
-                                                    let _queue = get_queue(&channel, queue_name).await?;
-                                                    basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
+                                                let queue_name: &str = req.reply_to.as_ref();
+                                                let _queue = get_queue(&channel, queue_name).await?;
+                                                basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
 
-                                                    channel.basic_ack(delivery_tag_req, BasicAckOptions::default()).await?;
+                                                basic_ack(&channel, delivery_tag_req).await?;
                                             },
                                             fetch::Kind::Proxy { line, delivery_tag_proxy }=> {
-                                                let status = response.status();
                                                 if status == http::StatusCode::FORBIDDEN {
                                                     warn!("{}: forbidden", line);
-                                                    channel
-                                                        .basic_ack(delivery_tag_proxy, BasicAckOptions::default())
-                                                        .await?
-                                                    ;
+                                                    basic_ack(&channel, delivery_tag_proxy).await?;
                                                     let queue_name = "proxies_forbidden";
                                                     let _queue = get_queue(&channel, queue_name).await?;
                                                     basic_publish(&channel, queue_name, line).await?;
-                                                    channel.basic_reject(delivery_tag_req, BasicRejectOptions{ requeue: true }).await?;
+                                                    basic_reject(&channel, delivery_tag_req).await?;
                                                 } else {
-                                                    let text = response.text().await?;
+                                                    let url_res = url;
                                                     info!("{}: {}", req.url, status);
                                                     let res = Res {
+                                                        url_req: req.url,
+                                                        url_res,
                                                         status,
                                                         text,
                                                     };
@@ -232,7 +234,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                                     let _queue = get_queue(&channel, queue_name).await?;
                                                     basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
 
-                                                    channel.basic_ack(delivery_tag_req, BasicAckOptions::default()).await?;
+                                                    basic_ack(&channel, delivery_tag_req).await?;
                                                     tokio::time::delay_for(Duration::from_millis(PROXY_REST_DURATION)).await;
 
                                                     info!("line: {}", line);
@@ -280,7 +282,6 @@ mod fetch {
     use amq_protocol_types::LongLongUInt;
 
     use super::{Req};
-    // use lapin::{Channel, options::{BasicAckOptions}};
 
     pub struct Arg {
         pub client: reqwest::Client,
@@ -294,9 +295,13 @@ mod fetch {
 
     pub enum RequestRet {
         Err(reqwest::Error),
-        Ok(reqwest::Response),
+        Ok{
+            url: reqwest::Url,
+            status: http::StatusCode,
+            text: String,
+        },
     }
-                                    // fut_queue.push(fetch(FetchArg {client, line, own_ip.unwrap().ip}));
+
     pub struct Opt {
         pub req: Req,
         pub delivery_tag_req: LongLongUInt,
@@ -318,10 +323,24 @@ mod fetch {
                 ret: RequestRet::Err(err),
                 opt,
             }),
-            Ok(response) => Ok(Ret {
-                ret: RequestRet::Ok(response),
-                opt,
-            }),
+            Ok(response) => {
+                let url = response.url().clone();
+                let status = response.status();
+                match response.text().await {
+                    Err(err) => Ok(Ret { 
+                        ret: RequestRet::Err(err),
+                        opt,
+                    }),
+                    Ok(text) => Ok(Ret {
+                        ret: RequestRet::Ok{
+                            url,
+                            status,
+                            text,
+                        },
+                        opt,
+                    })
+                }
+            }
         }
     }
 }

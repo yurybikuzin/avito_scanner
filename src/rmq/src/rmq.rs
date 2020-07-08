@@ -2,7 +2,13 @@
 use anyhow::{anyhow, bail, Result, Error, Context};
 use lapin::{
     Queue, Channel, Consumer,
-    options::{QueueDeclareOptions, BasicConsumeOptions, BasicPublishOptions}, 
+    options::{
+        QueueDeclareOptions, 
+        BasicConsumeOptions, 
+        BasicPublishOptions, 
+        BasicAckOptions, 
+        BasicRejectOptions,
+    }, 
     types::FieldTable, 
     ConnectionProperties,
     BasicProperties,
@@ -63,16 +69,18 @@ pub async fn basic_publish<S: AsRef<str>, S2: AsRef<str>>(channel: &Channel, que
             BasicProperties::default(),
         )
         .await?
-        // .map_err(|e| {
-        //     eprintln!("can't publish: {}", e);
-        //     warp::reject::custom(error::Error::RMQError(Error::new(e)))
-        // })?
-        // .await?
     ;
-        // .map_err(|e| {
-        //     eprintln!("can't publish: {}", e);
-        //     warp::reject::custom(error::Error::RMQError(Error::new(e)))
-        // })?;
     Ok(())
 }
+
+pub async fn basic_ack(channel: &Channel, delivery_tag: amq_protocol_types::LongLongUInt) -> Result<()> {
+    channel.basic_ack(delivery_tag, BasicAckOptions::default()).await?;
+    Ok(())
+}
+
+pub async fn basic_reject(channel: &Channel, delivery_tag: amq_protocol_types::LongLongUInt) -> Result<()> {
+    channel.basic_reject(delivery_tag, BasicRejectOptions{ requeue: true }).await?;
+    Ok(())
+}
+
 

@@ -13,6 +13,8 @@ use serde::de::{self,
 // use std::time::Duration;
 #[derive(Debug)]
 pub struct Res {
+    pub url_req: reqwest::Url,
+    pub url_res: reqwest::Url,
     pub status: http::StatusCode,
     pub text: String,
 }
@@ -20,11 +22,13 @@ pub struct Res {
 #[derive(Deserialize)]
 #[serde(field_identifier, rename_all = "snake_case")]
 enum Field { 
+    UrlReq,
+    UrlRes,
     Status,
     Text, 
 }
 
-const FIELDS: &'static [&'static str] = &["status", "text"];
+const FIELDS: &'static [&'static str] = &["url_req", "url_res", "status", "text"];
 
 use serde::{Deserialize};
 impl Serialize for Res {
@@ -35,6 +39,12 @@ impl Serialize for Res {
         let mut state = serializer.serialize_struct("Res", FIELDS.len())?;
         for field in FIELDS {
             match *field {
+                "url_req" => {
+                    state.serialize_field("url_req", &self.url_req.as_str())?;
+                },
+                "url_res" => {
+                    state.serialize_field("url_res", &self.url_res.as_str())?;
+                },
                 "status" => {
                     state.serialize_field("status", &self.status.as_u16())?;
                 },
@@ -72,10 +82,32 @@ impl<'de> Visitor<'de> for ResVisitor {
     where
         V: MapAccess<'de>,
     {
+        let mut url_req = None;
+        let mut url_res = None;
         let mut status = None;
         let mut text = None;
         while let Some(key) = map.next_key()? {
             match key {
+                Field::UrlReq => {
+                    if url_req.is_some() {
+                        return Err(de::Error::duplicate_field("url_req"));
+                    }
+                    let s: String = map.next_value()?;
+                    url_req = match reqwest::Url::parse(s.as_ref()) {
+                        Err(_) => return Err(de::Error::invalid_value(serde::de::Unexpected::Str(s.as_ref()), &"valid url")),
+                        Ok(url) => Some(url),
+                    };
+                },
+                Field::UrlRes => {
+                    if url_res.is_some() {
+                        return Err(de::Error::duplicate_field("url_res"));
+                    }
+                    let s: String = map.next_value()?;
+                    url_res = match reqwest::Url::parse(s.as_ref()) {
+                        Err(_) => return Err(de::Error::invalid_value(serde::de::Unexpected::Str(s.as_ref()), &"valid url")),
+                        Ok(url) => Some(url),
+                    };
+                },
                 Field::Status => {
                     if status.is_some() {
                         return Err(de::Error::duplicate_field("status"));
@@ -94,9 +126,11 @@ impl<'de> Visitor<'de> for ResVisitor {
                 }
             }
         }
+        let url_req = url_req.ok_or_else(|| de::Error::missing_field("url_req"))?;
+        let url_res = url_res.ok_or_else(|| de::Error::missing_field("url_res"))?;
         let status = status.ok_or_else(|| de::Error::missing_field("status"))?;
         let text = text.ok_or_else(|| de::Error::missing_field("text"))?;
-        Ok(Res {status, text})
+        Ok(Res {url_req, url_res, status, text})
     }
 }
 
