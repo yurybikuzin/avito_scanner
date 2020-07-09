@@ -16,9 +16,9 @@ services:
             - ./dev/proj/sh:/sh
             - ./src:/home/rust/src
             - ./out:/out
-            - ./dev/proj/cargo-git/:/home/rust/.cargo/git
-            - ./dev/proj/cargo-registry/:/home/rust/.cargo/registry
-            - ./dev/proj/cargo-target/:/home/rust/src/target
+            - ./dev/proj/cargo-git:/home/rust/.cargo/git
+            - ./dev/proj/cargo-registry:/home/rust/.cargo/registry
+            - ./dev/proj/cargo-target:/home/rust/src/target
         depends_on:
             - proxy
 
@@ -31,13 +31,14 @@ services:
             - TZ=Europe/Moscow
 
             - BW_PROJ_NAME
-            - RUST_LOG=info
+            - RUST_LOG=proxy=info
         volumes:
-            - ./dev/proj/sh:/sh
-            - ./src/proxy/src:/home/rust/src
-            - ./dev/proxy/cargo-git/:/home/rust/.cargo/git
-            - ./dev/proxy/cargo-registry/:/home/rust/.cargo/registry
-            - ./dev/proxy/cargo-target/:/home/rust/src/target
+            - ./dev/proxy/sh:/sh
+            - ./src:/home/rust/src
+            # - ./src/proxy/:/home/rust/src
+            - ./dev/proj/cargo-git:/home/rust/.cargo/git
+            - ./dev/proj/cargo-registry:/home/rust/.cargo/registry
+            - ./dev/proj/cargo-target:/home/rust/src/target
         ports:
             - $BW_DEV_PROXY_PORT:8000
         depends_on:

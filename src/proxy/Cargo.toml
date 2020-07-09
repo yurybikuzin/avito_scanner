@@ -1,5 +1,5 @@
 [package]
-name = "rmq"
+name = "proxy"
 version = "0.1.0"
 authors = ["Yury Bikuzin <yury.bikuzin@gmail.com>"]
 edition = "2018"
