@@ -28,7 +28,7 @@ pub struct OwnIp {
     ip: String,
     last_update: Instant,
 }
-const PROXY_TIMEOUT: u64 = 20;//secs
+const PROXY_TIMEOUT: u64 = 10;//secs
 const OWN_IP_FRESH_DURATION: u64 = 10;//secs
 const SAME_TIME_PROXY_CHECK_MAX: usize = 20;
 

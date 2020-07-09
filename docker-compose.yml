@@ -11,15 +11,37 @@ services:
             - TZ=Europe/Moscow
 
             - BW_PROJ_NAME
+            - RUST_LOG=info
         volumes:
             - ./dev/proj/sh:/sh
             - ./src:/home/rust/src
             - ./out:/out
-            - ./cargo-git/:/home/rust/.cargo/git
-            - ./cargo-registry/:/home/rust/.cargo/registry
-            - ./cargo-target/:/home/rust/src/target
+            - ./dev/proj/cargo-git/:/home/rust/.cargo/git
+            - ./dev/proj/cargo-registry/:/home/rust/.cargo/registry
+            - ./dev/proj/cargo-target/:/home/rust/src/target
+        depends_on:
+            - proxy
+
+    proxy:
+        container_name: ${BW_PROJ_NAME}-proxy
+        image: bazawinner/dev-${BW_PROJ_NAME}-proj:${BW_DEV_PROJ_VERSION}
+        entrypoint: ["docker-entrypoint.sh"]
+        tty: true
+        environment:
+            - TZ=Europe/Moscow
+
+            - BW_PROJ_NAME
+            - RUST_LOG=info
+        volumes:
+            - ./dev/proj/sh:/sh
+            - ./src/proxy/src:/home/rust/src
+            - ./dev/proxy/cargo-git/:/home/rust/.cargo/git
+            - ./dev/proxy/cargo-registry/:/home/rust/.cargo/registry
+            - ./dev/proxy/cargo-target/:/home/rust/src/target
         ports:
-            - $BW_DEV_PROJ_PORT:8000
+            - $BW_DEV_PROXY_PORT:8000
+        depends_on:
+            - rmq
 
     rmq:
         container_name: ${BW_PROJ_NAME}-rmq
