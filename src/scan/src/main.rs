@@ -3,7 +3,7 @@ use log::{error, warn, info, debug, trace};
 #[allow(unused_imports)]
 use anyhow::{Result, Error, bail, anyhow};
 
-use env_logger;
+// use pritty_env_logger;
 use diap_store::{DiapStore};
 use id_store::{IdStore};
 use std::path::Path;
@@ -24,7 +24,7 @@ const PARAMS: &str = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=
 const THREAD_LIMIT_NETWORK: usize = 1;
 const THREAD_LIMIT_FILE: usize = 2;
 const ITEMS_PER_PAGE: usize = 50;
-const RETRY_COUNT: usize = 3;
+// const RETRY_COUNT: usize = 3;
 
 const CARD_OUT_DIR_SPEC: &str = "/out";
 
@@ -32,7 +32,7 @@ use term::Term;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    pretty_env_logger::init();
 
     let params = env::get("AVITO_PARAMS", PARAMS.to_owned())?;
     let id_store_file_spec= &Path::new(ID_STORE_FILE_SPEC);
@@ -47,7 +47,8 @@ async fn main() -> Result<()> {
 
     let thread_limit_network = env::get("AVITO_THREAD_LIMIT_NETWORK", THREAD_LIMIT_NETWORK)?;
     let thread_limit_file = env::get("AVITO_THREAD_LIMIT_FILE", THREAD_LIMIT_FILE)?;
-    let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
+    // let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
+    let client_provider = client::Provider::new(client::Kind::ViaProxy(rmq::get_pool()));
 
     let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 
@@ -71,6 +72,7 @@ async fn main() -> Result<()> {
                 count_limit,
                 price_precision,
                 price_max_inc,
+                client_provider: client_provider.clone(),
             };
 
             let diap_store = DiapStore::from_file(diap_store_file_spec).await;
@@ -115,7 +117,8 @@ async fn main() -> Result<()> {
                 diaps_ret: &diaps_ret, 
                 thread_limit_network,
                 items_per_page,
-                retry_count,
+                client_provider: client_provider.clone(),
+                // retry_count,
             };
             let mut term = Term::init(term::Arg::new().header("Получение списка идентификаторов . . ."))?;
             let start = Instant::now();
@@ -149,7 +152,9 @@ async fn main() -> Result<()> {
         out_dir: &out_dir,
         thread_limit_network,
         thread_limit_file,
-        retry_count,
+        // client_provider,
+        client_provider: client_provider.clone(),
+        // retry_count,
     };
     let start = Instant::now();
     let ret = cards::fetch_and_save(&mut auth, arg, Some(|arg: cards::CallbackArg| -> Result<()> {

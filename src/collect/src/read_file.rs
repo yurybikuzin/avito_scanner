@@ -17,7 +17,7 @@ pub struct Arg {
 
 use std::str;
 
-pub type Ret = cards::Card;
+pub type Ret = cards::Fetched;
 pub async fn run(arg: Arg) -> Result<Ret> {
     let mut file = File::open(&arg.file_path).await?;
     let mut contents = vec![];

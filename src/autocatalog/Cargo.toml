@@ -32,10 +32,12 @@ arrange_millis = { path = "../arrange_millis" }
 ids = { path = "../ids" }
 collect = { path = "../collect" }
 json = { path = "../json" }
+client = { path = "../client" }
+rmq = { path = "../rmq" }
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
-env_logger = "0.7.1"
+pretty_env_logger = "0.4"
 
 # ansi-escapes = "0.1"
 

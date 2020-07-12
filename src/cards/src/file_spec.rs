@@ -25,3 +25,35 @@ pub fn get(out_dir: &Path, id: u64) -> PathBuf {
     path.with_extension("json")
 }
 
+// ============================================================================
+// ============================================================================
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    #[allow(unused_imports)]
+    use log::{error, warn, info, debug, trace};
+    use super::*;
+
+    #[tokio::test]
+    async fn test_file_spec() -> Result<()> {
+        test_helper::init();
+
+        let out_dir = &Path::new("out_test");
+
+        let id = std::u64::MAX - 1;
+        let fspec = get(out_dir, id);
+        assert_eq!(fspec.to_string_lossy(), "out_test/ff/ff/ff/ff/ff/ff/ff/fe.json");
+
+        let out_dir = &Path::new("out");
+        let id = std::u64::MAX;
+        let fspec = get(out_dir, id);
+        assert_eq!(fspec.to_string_lossy(), "out/ff/ff/ff/ff/ff/ff/ff/ff.json");
+
+        Ok(())
+    }
+
+}
+
+
+

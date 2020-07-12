@@ -3,7 +3,7 @@ use log::{error, warn, info, debug, trace};
 #[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
 
-use super::rmq::Pool;
+use rmq::Pool;
 use warp::Filter;
 use super::handlers;
 use std::convert::Infallible;

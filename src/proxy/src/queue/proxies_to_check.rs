@@ -6,7 +6,7 @@ use anyhow::{anyhow, bail, Result, Error, Context};
 
 use std::time::Duration;
 use futures::{StreamExt};
-use super::super::rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish, basic_ack};
+use rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish, basic_ack};
 use json::{Json, By};
 
 pub async fn process(pool: Pool) -> Result<()> {
@@ -28,10 +28,6 @@ pub struct OwnIp {
     ip: String,
     last_update: Instant,
 }
-const PROXY_TIMEOUT: u64 = 10;//secs
-const OWN_IP_FRESH_DURATION: u64 = 10;//secs
-const SAME_TIME_PROXY_CHECK_MAX: usize = 20;
-
 use futures::{
     future::{
         Fuse, 
@@ -62,12 +58,13 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
 
     // let (sender, mut stream) = mpsc::unbounded();
     loop {
-        let consumer_next_fut = if fut_queue.len() < SAME_TIME_PROXY_CHECK_MAX {
+        let same_time_proxy_check_max = SAME_TIME_PROXY_CHECK_MAX.load(Ordering::Relaxed) as usize;
+        let consumer_next_fut = if fut_queue.len() <  same_time_proxy_check_max{
             consumer.next().fuse()
         } else {
             Fuse::terminated()
         };
-        let consumer_timeout_fut = if fut_queue.len() < SAME_TIME_PROXY_CHECK_MAX && STATE_PROXIES_TO_CHECK.load(Ordering::Relaxed) == STATE_PROXIES_TO_CHECK_FILLED {
+        let consumer_timeout_fut = if fut_queue.len() < same_time_proxy_check_max && STATE_PROXIES_TO_CHECK.load(Ordering::Relaxed) == STATE_PROXIES_TO_CHECK_FILLED {
             tokio::time::delay_for(std::time::Duration::from_secs(5)).fuse()
         } else {
             Fuse::terminated()
@@ -91,7 +88,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                 let own_ip = match own_ip_opt {
                                     None => get_own_ip().await?,
                                     Some(own_ip) => {
-                                        if Instant::now().duration_since(own_ip.last_update).as_secs() < OWN_IP_FRESH_DURATION {
+                                        if Instant::now().duration_since(own_ip.last_update).as_secs() < OWN_IP_FRESH_DURATION.load(Ordering::Relaxed) as u64 {
                                             own_ip
                                         } else {
                                             get_own_ip().await?
@@ -100,7 +97,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                 };
                                 let client = reqwest::Client::builder()
                                     .proxy(url_proxy)
-                                    .timeout(Duration::from_secs(PROXY_TIMEOUT))
+                                    .timeout(Duration::from_secs(PROXY_TIMEOUT.load(Ordering::Relaxed) as u64))
                                     .build()?
                                 ;
                                 fut_queue.push(op(OpArg::Check(check::Arg {

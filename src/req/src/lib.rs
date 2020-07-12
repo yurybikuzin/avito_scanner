@@ -12,6 +12,7 @@ use serde::de::{self,
 use std::time::Duration;
 #[derive(Debug)]
 pub struct Req {
+    pub correlation_id: uuid::Uuid,
     pub reply_to: String,
     pub method: reqwest::Method,
     pub url: reqwest::Url,
@@ -22,6 +23,7 @@ pub struct Req {
 #[derive(Deserialize)]
 #[serde(field_identifier, rename_all = "snake_case")]
 enum Field { 
+    CorrelationId,
     ReplyTo,
     Method, 
     Url, 
@@ -29,7 +31,7 @@ enum Field {
     NoProxy,
 }
 
-const FIELDS: &'static [&'static str] = &["reply_to", "method", "url", "timeout", "no_proxy"];
+const FIELDS: &'static [&'static str] = &["correlation_id", "reply_to", "method", "url", "timeout", "no_proxy"];
 
 use serde::{Deserialize};
 impl Serialize for Req {
@@ -40,6 +42,9 @@ impl Serialize for Req {
         let mut state = serializer.serialize_struct("Req", FIELDS.len())?;
         for field in FIELDS {
             match *field {
+                "correlation_id" => {
+                    state.serialize_field("correlation_id", &self.correlation_id.to_string())?;
+                },
                 "reply_to" => {
                     state.serialize_field("reply_to", &self.reply_to.as_str())?;
                 },
@@ -102,6 +107,7 @@ impl<'de> Visitor<'de> for ReqVisitor {
     where
         V: MapAccess<'de>,
     {
+        let mut correlation_id = None;
         let mut reply_to = None;
         let mut method = None;
         let mut url = None;
@@ -109,6 +115,16 @@ impl<'de> Visitor<'de> for ReqVisitor {
         let mut no_proxy = None;
         while let Some(key) = map.next_key()? {
             match key {
+                Field::CorrelationId => {
+                    if correlation_id.is_some() {
+                        return Err(de::Error::duplicate_field("correlation_id"));
+                    }
+                    let s: String = map.next_value()?;
+                    correlation_id = match uuid::Uuid::parse_str(&s) {
+                        Ok(uuid) => Some(uuid),
+                        Err(_) => return Err(de::Error::invalid_value(serde::de::Unexpected::Str(s.as_ref()), &"valid UUID")),
+                    };
+                }
                 Field::ReplyTo => {
                     if reply_to.is_some() {
                         return Err(de::Error::duplicate_field("reply_to"));
@@ -157,10 +173,11 @@ impl<'de> Visitor<'de> for ReqVisitor {
                 }
             }
         }
+        let correlation_id = correlation_id.ok_or_else(|| de::Error::missing_field("correlation_id"))?;
         let reply_to = reply_to.ok_or_else(|| de::Error::missing_field("reply_to"))?;
         let method = method.ok_or_else(|| de::Error::missing_field("method"))?;
         let url = url.ok_or_else(|| de::Error::missing_field("url"))?;
-        Ok(Req {reply_to, method, url, timeout, no_proxy})
+        Ok(Req {correlation_id, reply_to, method, url, timeout, no_proxy})
     }
 }
 
@@ -187,6 +204,7 @@ mod tests {
         init();
 
         let json = r#"{
+            "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
             "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo",
@@ -195,10 +213,11 @@ mod tests {
         }"#;
         let req: Req = serde_json::from_str(json).unwrap();
         let tst = serde_json::to_string(&req).unwrap();
-        let eta = r#"{"method":"GET","url":"https://bikuzin.baza-winner.ru/echo","timeout":5,"no_proxy":true}"#;
+        let eta = r#"{"correlation_id":"550e8400-e29b-41d4-a716-446655440000","reply_to":"response","method":"GET","url":"https://bikuzin.baza-winner.ru/echo","timeout":5,"no_proxy":true}"#;
         assert_eq!(tst, eta);
 
         let json = r#"{
+            "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
             "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo",
@@ -206,20 +225,22 @@ mod tests {
         }"#;
         let req: Req = serde_json::from_str(json).unwrap();
         let tst = serde_json::to_string(&req).unwrap();
-        let eta = r#"{"method":"GET","url":"https://bikuzin.baza-winner.ru/echo","timeout":5}"#;
+        let eta = r#"{"correlation_id":"550e8400-e29b-41d4-a716-446655440000","reply_to":"response","method":"GET","url":"https://bikuzin.baza-winner.ru/echo","timeout":5}"#;
         assert_eq!(tst, eta);
 
         let json = r#"{
+            "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
             "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo"
         }"#;
         let req: Req = serde_json::from_str(json).unwrap();
         let tst = serde_json::to_string(&req).unwrap();
-        let eta = r#"{"method":"GET","url":"https://bikuzin.baza-winner.ru/echo"}"#;
+        let eta = r#"{"correlation_id":"550e8400-e29b-41d4-a716-446655440000","reply_to":"response","method":"GET","url":"https://bikuzin.baza-winner.ru/echo"}"#;
         assert_eq!(tst, eta);
 
         let json = r#"{
+            "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
             "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo",
@@ -227,7 +248,7 @@ mod tests {
         }"#;
         let err = serde_json::from_str::<Req>(json).unwrap_err();
         let tst = format!("{}", err);
-        let eta = r#"unknown field `proxy`, expected one of `reply_to`, `method`, `url`, `timeout`, `no_proxy` at line 4 column 19"#.to_owned();
+        let eta = r#"unknown field `proxy`, expected one of `correlation_id`, `reply_to`, `method`, `url`, `timeout`, `no_proxy` at line 6 column 19"#.to_owned();
         assert_eq!(tst, eta); 
 
         Ok(())

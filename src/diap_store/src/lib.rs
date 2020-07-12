@@ -187,21 +187,19 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| env_logger::init());
-    }
 
     #[tokio::test]
-    async fn to_file() -> Result<()> {
-        init();
+    async fn test_to_file() -> Result<()> {
+        test_helper::init();
 
+        let pool = rmq::get_pool();
+        let client_provider = client::Provider::new(client::Kind::ViaProxy(pool));
         let arg = diaps::Arg {
             params: "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private",
             count_limit: 4900,
             price_precision: 20000,
             price_max_inc: 1000000,
+            client_provider,
         };
         let mut diaps: Vec<diaps::Diap> = Vec::new();
         diaps.push(diaps::Diap { price_min: None, price_max: Some(234376), count: 4761, checks: 7});
@@ -229,8 +227,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn from_file() -> Result<()> {
-        init();
+    async fn test_from_file() -> Result<()> {
+        test_helper::init();
 
         let err = DiapStore::from_file(Path::new("out_test/diaps_corrupted.json")).await;
         assert!(err.is_err());

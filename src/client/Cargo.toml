@@ -1,0 +1,23 @@
+[package]
+name = "client"
+version = "0.1.0"
+authors = ["Yury Bikuzin <yury.bikuzin@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+log = "0.4"
+reqwest = { version = "0.10.6" }
+http = "0.2.1"
+arrange_millis = { path = "../arrange_millis" }
+via_proxy = { path = "../via_proxy" }
+rmq = { path = "../rmq" }
+url = "2.1.1"
+
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
+auth = { path = "../auth" }
+test_helper = { path = "../test_helper" }

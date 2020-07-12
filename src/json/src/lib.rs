@@ -188,6 +188,56 @@ macro_rules! parse_as_ {
     };
 }
 
+macro_rules! parse_as__after {
+    ($type: ty) => {
+        paste::item!{
+            pub fn [< parse_as_ $type _after> ]<F: Fn(&str) -> std::borrow::Cow<str>> (&self, closure: F) -> Result<$type> {
+                match &self.value {
+                    Value::Number(n) => {
+                        if n.[< is_ $type >] () {
+                            let n = n.[< as_ $type >]().unwrap();
+                            Ok(n)
+                        } else {
+                            bail!("{} expected to be a {}, but: {}", self.path, stringify!($type), n);
+                        }
+                    },
+                    Value::String(s) => {
+                        closure(s).parse::<$type>().context(format!("{} expected to be a {} or String parseable to {}, but: {}", self.path, stringify!($type), stringify!($type), serde_json::to_string_pretty(&self.value)?))
+                    },
+                    _ => {
+                        bail!("{} expected to be a {} or String parseable to {}, but: {}", self.path, stringify!($type), stringify!($type), serde_json::to_string_pretty(&self.value)?);
+                    },
+                }
+            }
+        }
+    };
+    // ($from: ty => $type: ty, $closure: tt) => {
+    //     paste::item!{
+    //         pub fn [< parse_as_ $type >] (&self) -> Result<$type> {
+    //             match &self.value {
+    //                 Value::Number(n) => {
+    //                     if n.[< is_ $from >] () {
+    //                         let n = n.[< as_ $from >]().unwrap();
+    //                         let n = $type::try_from(n)
+    //                             .map_err(|err| Error::new(err))
+    //                             .context(format!("{} expected to be a {}, but: {}", self.path, stringify!($type), n))?;
+    //                         Ok(n)
+    //                     } else {
+    //                         bail!("{} expected to be a {}, but: {}", self.path, stringify!($type), n);
+    //                     }
+    //                 },
+    //                 Value::String(s) => {
+    //                     $closure(s).parse::<$type>().context(format!("{} expected to be a {} or String parseable to {}, but: {}", self.path, stringify!($type), stringify!($type), serde_json::to_string_pretty(&self.value)?))
+    //                 },
+    //                 _ => {
+    //                     bail!("{} expected to be a {} or String parseable to {}, but: {}", self.path, stringify!($type), stringify!($type), serde_json::to_string_pretty(&self.value)?);
+    //                 },
+    //             }
+    //         }
+    //     }
+    // };
+}
+
 impl<'a> Json {
     pub fn new(value: Value, src: JsonSource) -> Self {
         Self {
@@ -340,6 +390,7 @@ impl<'a> Json {
 
     parse_as_!(f64);
 
+    parse_as__after!(u64);
 }
 
 impl fmt::Display for Json {
@@ -412,17 +463,12 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| pretty_env_logger::init());
-    }
 
     use pretty_assertions::{assert_eq};
 
     #[tokio::test]
     async fn test_json_0() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -458,7 +504,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_1() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -473,7 +519,7 @@ mod tests {
         
     #[tokio::test]
     async fn test_json_2() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -491,7 +537,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_3() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -506,7 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_4() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -519,7 +565,7 @@ mod tests {
         
     #[tokio::test]
     async fn test_json_5() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -532,7 +578,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_6() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -552,7 +598,7 @@ mod tests {
         
     #[tokio::test]
     async fn test_json_7() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -575,7 +621,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_8() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -594,7 +640,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_9() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -610,7 +656,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_a() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -644,7 +690,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_b() -> Result<()> {
-        init();
+        test_helper::init();
 
         let file_path = std::path::Path::new("test_data/sample.json");
         let json: Json = Json::from_file(&file_path).await?;
@@ -663,7 +709,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_json_c() -> Result<()> {
-        init();
+        test_helper::init();
 
         let json = r#"
             { "some": "thing" }
@@ -676,6 +722,26 @@ mod tests {
         let tst = err.unwrap_err().downcast::<String>().unwrap();
         let eta = r#""json"."some" expected to be a u8 or String parseable to u8, but: "thing""#.to_owned();
         assert_eq!(tst, eta); 
+
+        Ok(())
+    }
+
+    use lazy_static::lazy_static;
+    use regex::Regex;
+    #[tokio::test]
+    async fn test_json_d() -> Result<()> {
+        test_helper::init();
+
+        let file_path = std::path::Path::new("test_data/sample.json");
+        let json: Json = Json::from_file(&file_path).await?;
+
+        let value = json.get([By::key("modifications"), By::key("items"), By::index(0), By::key("specification"), By::key("blocks"), By::index(0), By::key("params"), By::index(4), By::key("name")])?;
+
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"[^\d]").unwrap();
+        }
+        let tst = value.parse_as_u64_after(|s| RE.replace_all(s, ""))?;
+        assert_eq!(tst, 100);
 
         Ok(())
     }

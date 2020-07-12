@@ -11,7 +11,7 @@ default-run = "scan" # https://stackoverflow.com/questions/51785457/how-can-i-sp
 log = "0.4"
 anyhow = "1.0"
 
-env_logger = "0.7.1"
+pretty_env_logger = "0.4"
 tokio = { version = "0.2", features = ["rt-threaded", "macros", "fs"] }
 chrono = "0.4.11"
 ansi-escapes = "0.1"
@@ -27,6 +27,8 @@ arrange_millis = { path = "../arrange_millis" }
 cards = { path = "../cards" }
 collect = { path = "../collect" }
 to_csv = { path = "../to_csv" }
+client = { path = "../client" }
+rmq = { path = "../rmq" }
 
 # url = "2.1.1"
 # reqwest = { version = "0.10.6", features = ["json"] }

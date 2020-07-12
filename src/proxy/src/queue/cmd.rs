@@ -14,7 +14,7 @@ use lapin::{
 };
 use std::time::Duration;
 use futures::{StreamExt};
-use super::super::rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish, basic_ack};
+use rmq::{get_conn, get_queue, Pool, basic_consume, basic_publish, basic_ack};
 // use tokio::fs::File;
 
 pub async fn process(pool: Pool) -> Result<()> {

@@ -8,11 +8,9 @@ use anyhow::{anyhow, bail, Result, Error, Context};
 use futures::{join };
 use std::env;
 
-mod req;
-mod res;
 mod api;
 mod handlers;
-mod rmq;
+// mod rmq;
 mod error;
 mod queue;
 

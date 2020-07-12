@@ -187,17 +187,12 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| env_logger::init());
-    }
 
     use std::collections::HashSet;
 
     #[tokio::test]
-    async fn to_file() -> Result<()> {
-        init();
+    async fn test_to_file() -> Result<()> {
+        test_helper::init();
 
         let key = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
         let mut ids: ids::Ret = HashSet::new();
@@ -222,8 +217,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn from_file() -> Result<()> {
-        init();
+    async fn test_from_file() -> Result<()> {
+        test_helper::init();
 
         let err = IdStore::from_file(Path::new("out_test/ids_corrupted.json")).await;
         assert!(err.is_err());

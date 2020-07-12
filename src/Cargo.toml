@@ -10,10 +10,17 @@ members = [
     "ids", 
     "id_store", 
     "cards", 
-    "autocatalog",
+    # "autocatalog",
     "scan", 
     "collect",
     "to_csv",
     "proxy",
+    "via_proxy",
+    "rmq",
+    "req",
+    "res",
+    "promise",
+    "client",
+    "test_helper",
 ]
 

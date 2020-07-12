@@ -38,7 +38,8 @@ pub struct Arg<'a> {
     pub out_dir: &'a Path, 
     pub thread_limit_network: usize,
     pub thread_limit_file: usize,
-    pub retry_count: usize,
+    pub client_provider: client::Provider,
+    // pub retry_count: usize,
 }
 
 macro_rules! push_fut_fetch {
@@ -47,7 +48,7 @@ macro_rules! push_fut_fetch {
         let arg = OpArg::Fetch (fetch::Arg {
             client: $client,
             item: item,
-            retry_count: $arg.retry_count,
+            // retry_count: $arg.retry_count,
         });
         let fut = op(arg);
         $fut_queue.push(fut);
@@ -166,7 +167,8 @@ where
                                         None
                                     };
                                     if used_network_threads < arg.thread_limit_network {
-                                        let client = reqwest::Client::new();
+                                        // let client = reqwest::Client::new();
+                                        let client = arg.client_provider.build().await?;
                                         push_fut_fetch!(fut_queue, client, arg, items_to_fetch, items_to_fetch_i);
                                         used_network_threads += 1;
                                     }
@@ -266,7 +268,7 @@ mod tests {
     use std::sync::Once;
     static INIT: Once = Once::new();
     fn init() {
-        INIT.call_once(|| env_logger::init());
+        INIT.call_once(|| pretty_env_logger::init());
     }
 
     use term::Term;
@@ -293,7 +295,8 @@ mod tests {
             out_dir,
             thread_limit_network: 1,
             thread_limit_file: 2,
-            retry_count: 3,
+            client_provider: client::Provider::new(client::Kind::ViaProxy(rmq::get_pool())),
+            // retry_count: 3,
         };
 
         let mut term = Term::init(term::Arg::new().header("Получение автокаталога . . ."))?;

@@ -5,22 +5,15 @@ use log::{error, warn, info, debug, trace};
 use anyhow::{anyhow, bail, Result, Error, Context};
 
 use std::collections::VecDeque;
-// use lapin::{
-//     // Consumer,
-//     // options::{
-//     //     BasicRejectOptions,
-//     // }, 
-// };
 use std::time::Duration;
 use futures::{StreamExt};
-use super::super::rmq::{
+use rmq::{
     get_conn, 
     get_queue, 
     Pool, 
     basic_consume, 
     basic_publish, 
     basic_ack,
-    // basic_reject,
 };
 
 pub async fn process(pool: Pool) -> Result<()> {
@@ -37,9 +30,8 @@ pub async fn process(pool: Pool) -> Result<()> {
     }
 }
 
-// const FETCH_PROXIES_AFTER_DURATION: u64 = 5; //secs
-use super::super::req::Req;
-use super::super::res::Res;
+use req::Req;
+use res::Res;
 
 use futures::{
     future::{
@@ -61,11 +53,6 @@ struct ProxyError {
 }
 
 use super::*;
-const SAME_TIME_REQUEST_MAX: usize = 50;
-const SUCCESS_COUNT_MAX: usize = 5;
-const SUCCESS_COUNT_START: usize = 2;
-const RESPONSE_TIMEOUT: u64 = 10; //secs
-const PROXY_REST_DURATION: u64 = 1000; //millis
 
 async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queue_name: S2) -> Result<()> {
     let conn = get_conn(pool).await.map_err(|e| {
@@ -96,7 +83,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                 let client = reqwest::Client::builder()
                     .timeout(
                         req.timeout.unwrap_or(
-                            Duration::from_secs(RESPONSE_TIMEOUT)
+                            Duration::from_secs(RESPONSE_TIMEOUT.load(Ordering::Relaxed) as u64)
                         )
                     )
                     .build()?
@@ -116,7 +103,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                     .proxy(url_proxy)
                     .timeout(
                         req.timeout.unwrap_or(
-                            Duration::from_secs(RESPONSE_TIMEOUT)
+                            Duration::from_secs(RESPONSE_TIMEOUT.load(Ordering::Relaxed) as u64)
                         )
                     )
                     .build()?
@@ -137,7 +124,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
             }
         }
 
-        let consumer_request_next_fut = if fut_queue.len() < SAME_TIME_REQUEST_MAX {
+        let consumer_request_next_fut = if fut_queue.len() < SAME_TIME_REQUEST_MAX.load(Ordering::Relaxed) as usize {
             consumer_request.next().fuse()
         } else {
             Fuse::terminated()
@@ -269,23 +256,24 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
 
                                             fetch::Kind::Proxy { line, success_count, delivery_tag_proxy }=> {
                                                 let url_res = url;
-                                                let res = Res {
-                                                    url_req: req.url.clone(),
-                                                    url_res,
-                                                    status,
-                                                    text,
-                                                };
                                                 match status {
-                                                    http::StatusCode::OK => {
+                                                    http::StatusCode::OK | http::StatusCode::BAD_REQUEST | http::StatusCode::NOT_FOUND => {
                                                         info!("{}: {}: {}", line, req.url, status);
                                                         let queue_name: &str = req.reply_to.as_ref();
                                                         let _queue = get_queue(&channel, queue_name).await?;
+                                                        let res = Res {
+                                                            correlation_id: req.correlation_id,
+                                                            url_req: req.url.clone(),
+                                                            url_res,
+                                                            status,
+                                                            text,
+                                                        };
                                                         basic_publish(&channel, queue_name, serde_json::to_string_pretty(&res).unwrap()).await?;
 
                                                         basic_ack(&channel, delivery_tag_req).await?;
                                                         fut_queue.push(op(OpArg::ReuseProxy(reuse_proxy::Arg {
                                                             line,
-                                                            success_count: if success_count >= SUCCESS_COUNT_MAX { success_count } else { success_count + 1 },
+                                                            success_count: if success_count >= SUCCESS_COUNT_MAX.load(Ordering::Relaxed) as usize { success_count } else { success_count + 1 },
                                                             delivery_tag: delivery_tag_proxy,
                                                             push_front: true,
                                                         })));
@@ -324,7 +312,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                         let line = std::str::from_utf8(&delivery.data).unwrap();
                         let url_proxy = format!("http://{}", line);
                         if let Ok(_url_proxy) = reqwest::Proxy::all(&url_proxy) {
-                            lines.push_back((line.to_owned(), SUCCESS_COUNT_START, delivery.delivery_tag));
+                            lines.push_back((line.to_owned(), SUCCESS_COUNT_START.load(Ordering::Relaxed) as usize, delivery.delivery_tag));
                         }
                     } else {
                         error!("Err(err) = consumer_proxies_to_use_next");
@@ -383,6 +371,7 @@ mod reuse_proxy {
     use log::{error, warn, info, debug, trace};
     #[allow(unused_imports)]
     use anyhow::{anyhow, bail, Result, Error, Context};
+    use super::super::*;
 
     pub struct Arg {
         pub line: String,
@@ -392,21 +381,11 @@ mod reuse_proxy {
     }
 
     pub type Ret = Arg;
-    // pub struct Ret {
-    //     pub line: String,
-    //     pub success_count: usize,
-    //     pub delivery_tag: amq_protocol_types::LongLongUInt,
-    // }
 
     use std::time::Duration;
     pub async fn run(arg: Arg) -> Result<Ret> {
-        tokio::time::delay_for(Duration::from_millis(super::PROXY_REST_DURATION)).await;
+        tokio::time::delay_for(Duration::from_millis(PROXY_REST_DURATION.load(Ordering::Relaxed) as u64)).await;
         Ok(arg)
-        // Ok(Ret {
-        //     line: arg.line,
-        //     success_count: arg.success_count,
-        //     delivery_tag: arg.delivery_tag,
-        // })
     }
 }
 

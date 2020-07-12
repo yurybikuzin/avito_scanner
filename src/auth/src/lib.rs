@@ -123,15 +123,10 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| env_logger::init());
-    }
 
     #[tokio::test]
     async fn test_get() -> Result<()> {
-        init();
+        test_helper::init();
 
         let _ = get(Some(Arg::new())).await?;
 
@@ -140,7 +135,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lazy() -> Result<()> {
-        init();
+        test_helper::init();
 
         let mut auth = Lazy::new(Some(Arg::new()));
         assert_eq!(auth.key, None);

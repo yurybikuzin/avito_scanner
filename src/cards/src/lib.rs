@@ -1,5 +1,6 @@
 #![recursion_limit="512"]
 
+
 #[allow(unused_imports)]
 use log::{error, warn, info, debug, trace};
 #[allow(unused_imports)]
@@ -18,13 +19,13 @@ use futures::{
     },
 };
 
-mod card;
 mod file_spec;
 mod check;
 mod save;
 mod fetch;
+mod fetched;
 
-pub use card::{Card, Record};
+pub use fetched::{Fetched, Record};
 
 // ============================================================================
 // ============================================================================
@@ -34,7 +35,8 @@ pub struct Arg<'a> {
     pub out_dir: &'a Path, 
     pub thread_limit_network: usize,
     pub thread_limit_file: usize,
-    pub retry_count: usize,
+    pub client_provider: client::Provider,
+    // pub retry_count: usize,
 }
 
 macro_rules! push_fut_fetch {
@@ -44,7 +46,7 @@ macro_rules! push_fut_fetch {
             client: $client,
             auth: $auth.key().await?,
             id: id,
-            retry_count: $arg.retry_count,
+            // retry_count: $arg.retry_count,
         });
         let fut = op(arg);
         $fut_queue.push(fut);
@@ -53,10 +55,10 @@ macro_rules! push_fut_fetch {
 }
 
 macro_rules! push_fut_save {
-    ($fut_queue: expr, $card: expr, $id: expr, $out_dir: expr) => {
+    ($fut_queue: expr, $fetched: expr, $id: expr, $out_dir: expr) => {
         let arg = OpArg::Save (save::Arg {
             id: $id,
-            card: $card,
+            fetched: $fetched,
             out_dir: $out_dir
         });
         let fut = op(arg);
@@ -160,7 +162,8 @@ where
                                         None
                                     };
                                     if used_network_threads < arg.thread_limit_network {
-                                        let client = reqwest::Client::new();
+                                        // let client = reqwest::Client::new();
+                                        let client = arg.client_provider.build().await?;
                                         push_fut_fetch!(fut_queue, client, auth, arg, ids_non_existent, ids_non_existent_i);
                                         used_network_threads += 1;
                                     }
@@ -188,7 +191,7 @@ where
                                     None
                                 };
                                 received_qt += 1;
-                                push_fut_save!(fut_queue, ret.card, ret.id, arg.out_dir);
+                                push_fut_save!(fut_queue, ret.fetched, ret.id, arg.out_dir);
                                 if ids_non_existent_i < ids_non_existent.len() {
                                     let client = ret.client;
                                     push_fut_fetch!(fut_queue, client, auth, arg, ids_non_existent, ids_non_existent_i);
@@ -252,50 +255,33 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| env_logger::init());
-    }
+    // use test_helper
+    // use std::sync::Once;
+    // static INIT: Once = Once::new();
+    // fn init() {
+    //     INIT.call_once(|| pretty_env_logger::init());
+    // }
 
     use std::collections::HashSet;
 
-    #[tokio::test]
-    async fn test_file_spec() -> Result<()> {
-        init();
-
-        let out_dir = &Path::new("out_test");
-
-        let id = std::u64::MAX - 1;
-        let fspec = file_spec::get(out_dir, id);
-        assert_eq!(fspec.to_string_lossy(), "out_test/ff/ff/ff/ff/ff/ff/ff/fe.json");
-
-        let out_dir = &Path::new("out");
-        let id = std::u64::MAX;
-        let fspec = file_spec::get(out_dir, id);
-        assert_eq!(fspec.to_string_lossy(), "out/ff/ff/ff/ff/ff/ff/ff/ff.json");
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_check() -> Result<()> {
-        init();
-
-        let out_dir = &Path::new("out_test");
-        let id = 42;
-
-        let ret = check::run(check::Arg { out_dir, id }).await?;
-        assert_eq!(ret, check::Ret{id: Some(id)});
-
-        Ok(())
-    }
-
+    // #[tokio::test]
+    // async fn test_check() -> Result<()> {
+    //     test_helper::init();
+    //
+    //     let out_dir = &Path::new("out_test");
+    //     let id = 42;
+    //
+    //     let ret = check::run(check::Arg { out_dir, id }).await?;
+    //     assert_eq!(ret, check::Ret{id: Some(id)});
+    //
+    //     Ok(())
+    // }
+    //
     use term::Term;
 
     #[tokio::test]
     async fn test_fetch_and_save() -> Result<()> {
-        init();
+        test_helper::init();
 
         let mut ids: ids::Ret = HashSet::new();
         let ids_vec: Vec<u64> = vec![
@@ -316,7 +302,8 @@ mod tests {
             out_dir,
             thread_limit_network: 1,
             thread_limit_file: 12,
-            retry_count: 3,
+            client_provider: client::Provider::new(client::Kind::ViaProxy(rmq::get_pool())),
+            // retry_count: 3,
         };
         let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 

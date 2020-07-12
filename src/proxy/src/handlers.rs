@@ -3,9 +3,9 @@ use log::{error, warn, info, debug, trace};
 #[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
 
-use super::req::Req;
+use req::Req;
 use warp::{Rejection, Reply};
-use super::rmq::{self, Pool};
+use rmq::{self, Pool};
 use lapin::{ 
     // Queue, 
     Channel, 

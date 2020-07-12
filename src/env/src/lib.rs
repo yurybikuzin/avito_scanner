@@ -26,11 +26,6 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| env_logger::init());
-    }
 
     const COUNT_LIMIT: u64 = 4900;
     const PRICE_PRECISION: isize = 20000;
@@ -38,7 +33,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_works() -> Result<()> {
-        init();
+        test_helper::init();
 
         let count_limit: u64 = get("AVITO_COUNT_LIMIT", COUNT_LIMIT)?;
         let price_precision: isize = get("AVITO_PRICE_PRECISION", PRICE_PRECISION)?;

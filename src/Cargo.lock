@@ -100,8 +100,8 @@ name = "arrange_millis"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "env_logger",
  "log 0.4.8",
+ "pretty_env_logger",
  "tokio",
 ]
 
@@ -146,36 +146,11 @@ dependencies = [
  "anyhow",
  "arrange_millis",
  "auth",
- "env_logger",
  "http",
  "log 0.4.8",
  "reqwest",
+ "test_helper",
  "tokio",
-]
-
-[[package]]
-name = "autocatalog"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arrange_millis",
- "auth",
- "collect",
- "env_logger",
- "futures",
- "http",
- "ids",
- "itertools",
- "json",
- "lazy_static",
- "log 0.4.8",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "term",
- "tokio",
- "url",
 ]
 
 [[package]]
@@ -285,17 +260,21 @@ dependencies = [
  "anyhow",
  "arrange_millis",
  "auth",
+ "client",
  "env_logger",
  "futures",
  "http",
  "ids",
+ "json",
  "lazy_static",
  "log 0.4.8",
+ "pretty_env_logger",
  "regex",
- "reqwest",
+ "rmq",
  "serde",
  "serde_json",
  "term",
+ "test_helper",
  "tokio",
  "url",
 ]
@@ -324,6 +303,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrange_millis",
+ "auth",
+ "http",
+ "log 0.4.8",
+ "reqwest",
+ "rmq",
+ "test_helper",
+ "tokio",
+ "url",
+ "via_proxy",
+]
+
+[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -348,7 +344,6 @@ dependencies = [
  "anyhow",
  "arrange_millis",
  "cards",
- "env_logger",
  "futures",
  "lazy_static",
  "log 0.4.8",
@@ -356,6 +351,7 @@ dependencies = [
  "serde",
  "serde_json",
  "term",
+ "test_helper",
  "to_csv",
  "tokio",
 ]
@@ -515,12 +511,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "client",
  "diaps",
- "env_logger",
  "log 0.4.8",
  "pretty_assertions",
+ "rmq",
  "serde",
  "serde_json",
+ "test_helper",
  "thiserror",
  "tokio",
 ]
@@ -532,15 +530,18 @@ dependencies = [
  "anyhow",
  "arrange_millis",
  "auth",
+ "client",
  "env",
- "env_logger",
+ "http",
  "log 0.4.8",
- "reqwest",
+ "rmq",
  "serde",
  "serde_json",
  "term",
+ "test_helper",
  "tokio",
  "url",
+ "via_proxy",
 ]
 
 [[package]]
@@ -571,12 +572,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "134951f4028bdadb9b84baf4232681efbf277da25144b9b0ad65df75946c422b"
 
 [[package]]
-name = "either"
-version = "1.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
-
-[[package]]
 name = "encoding_rs"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,8 +585,8 @@ name = "env"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "env_logger",
  "log 0.4.8",
+ "test_helper",
  "tokio",
 ]
 
@@ -697,6 +692,7 @@ dependencies = [
  "futures-core",
  "futures-task",
  "futures-util",
+ "num_cpus",
 ]
 
 [[package]]
@@ -931,12 +927,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "env_logger",
  "ids",
  "log 0.4.8",
  "pretty_assertions",
  "serde",
  "serde_json",
+ "test_helper",
  "tokio",
 ]
 
@@ -958,16 +954,17 @@ dependencies = [
  "anyhow",
  "arrange_millis",
  "auth",
+ "client",
  "crossterm",
  "diaps",
  "env",
- "env_logger",
  "futures",
  "http",
  "log 0.4.8",
- "reqwest",
+ "rmq",
  "serde_json",
  "term",
+ "test_helper",
  "tokio",
  "url",
 ]
@@ -1006,15 +1003,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1034,11 +1022,13 @@ name = "json"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "lazy_static",
  "log 0.4.8",
  "paste",
  "pretty_assertions",
- "pretty_env_logger",
+ "regex",
  "serde_json",
+ "test_helper",
  "tokio",
 ]
 
@@ -1686,6 +1676,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "promise"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "log 0.4.8",
+ "pretty_env_logger",
+ "tokio",
+]
+
+[[package]]
 name = "proxy"
 version = "0.1.0"
 dependencies = [
@@ -1700,7 +1701,10 @@ dependencies = [
  "log 0.4.8",
  "pretty_assertions",
  "pretty_env_logger",
+ "req",
  "reqwest",
+ "res",
+ "rmq",
  "serde",
  "serde_json",
  "thiserror",
@@ -1923,6 +1927,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "req"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "log 0.4.8",
+ "pretty_assertions",
+ "pretty_env_logger",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "reqwest"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1946,7 +1965,6 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde",
- "serde_json",
  "serde_urlencoded",
  "tokio",
  "tokio-tls",
@@ -1955,6 +1973,35 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "winreg",
+]
+
+[[package]]
+name = "res"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "http",
+ "log 0.4.8",
+ "pretty_assertions",
+ "pretty_env_logger",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "rmq"
+version = "0.1.0"
+dependencies = [
+ "amq-protocol-types",
+ "anyhow",
+ "deadpool",
+ "deadpool-lapin",
+ "lapin",
+ "log 0.4.8",
+ "tokio-amqp",
 ]
 
 [[package]]
@@ -1988,14 +2035,16 @@ dependencies = [
  "auth",
  "cards",
  "chrono",
+ "client",
  "collect",
  "diap_store",
  "diaps",
  "env",
- "env_logger",
  "id_store",
  "ids",
  "log 0.4.8",
+ "pretty_env_logger",
+ "rmq",
  "term",
  "to_csv",
  "tokio",
@@ -2223,8 +2272,8 @@ dependencies = [
  "anyhow",
  "arrange_millis",
  "crossterm",
- "env_logger",
  "log 0.4.8",
+ "pretty_env_logger",
  "rand 0.7.3",
  "tokio",
 ]
@@ -2236,6 +2285,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb6bfa289a4d7c5766392812c0a1f4c1ba45afa1ad47803c11e1f407d846d75f"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test_helper"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "pretty_env_logger",
 ]
 
 [[package]]
@@ -2291,8 +2348,8 @@ dependencies = [
  "cards",
  "collect",
  "csv",
- "env_logger",
  "log 0.4.8",
+ "pretty_env_logger",
  "serde",
  "tokio",
 ]
@@ -2492,6 +2549,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05e42f7c18b8f902290b009cde6d651262f956c98bc51bca4cd1d511c9cd85c7"
 
 [[package]]
+name = "uuid"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fde2f6a4bea1d6e007c4ad38c6839fa71cbb63b6dbf5b595aa38dc9b1093c11"
+dependencies = [
+ "rand 0.7.3",
+]
+
+[[package]]
 name = "vcpkg"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2508,6 +2574,27 @@ name = "version_check"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
+
+[[package]]
+name = "via_proxy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "http",
+ "lapin",
+ "lazy_static",
+ "log 0.4.8",
+ "pretty_env_logger",
+ "promise",
+ "req",
+ "res",
+ "rmq",
+ "serde_json",
+ "tokio",
+ "url",
+ "uuid",
+]
 
 [[package]]
 name = "want"

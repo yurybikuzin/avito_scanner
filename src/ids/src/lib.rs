@@ -9,7 +9,6 @@ use std::time::Instant;
 use std::collections::HashSet;
 
 use url::Url;
-use http::StatusCode;
 use serde_json::Value;
 
 use futures::{
@@ -20,6 +19,8 @@ use futures::{
     },
 };
 
+use client::{Client};
+
 // ============================================================================
 // ============================================================================
 
@@ -28,7 +29,7 @@ pub struct Arg<'a> {
     pub diaps_ret: &'a diaps::Ret, 
     pub items_per_page: usize,
     pub thread_limit_network: usize,
-    pub retry_count: usize,
+    pub client_provider: client::Provider,
 }
 
 macro_rules! push_fut {
@@ -41,7 +42,7 @@ macro_rules! push_fut {
             params: $arg.params.to_owned(),
             last_stamp: $arg.diaps_ret.last_stamp,
             items_per_page: $arg.items_per_page,
-            retry_count: $arg.retry_count,
+            // retry_count: $arg.retry_count,
         };
         let fut = fetch(fetch_arg);
         $fut_queue.push(fut);
@@ -74,7 +75,9 @@ where
 
     let mut fut_queue = FuturesUnordered::new();
     while diap_i < arg.thread_limit_network && diap_i < diaps_len {
-        let client = reqwest::Client::new();
+        // let client = reqwest::Client::new();
+        // let client = reqwest::Client::new();
+        let client = arg.client_provider.build().await?;
         let diap = arg.diaps_ret.diaps[diap_i].clone();
         push_fut!(fut_queue, client, auth, arg, 1, diap);
         diap_i += 1;
@@ -146,7 +149,8 @@ where
 // ============================================================================
 
 struct FetchArg {
-    client: reqwest::Client,
+    // client: reqwest::Client,
+    client: Client,
     auth: String,
 
     diap: diaps::Diap,
@@ -155,7 +159,7 @@ struct FetchArg {
     params: String,
     last_stamp: u64,
     items_per_page: usize,
-    retry_count: usize,
+    // retry_count: usize,
 }
 
 struct FetchRet {
@@ -177,53 +181,10 @@ async fn fetch(arg: FetchArg) -> Result<FetchRet>{
     let url = Url::parse(&url)?;
 
     let now = Instant::now();
-    let text = {
-        let text: Result<String>;
-        let mut remained = arg.retry_count;
-        loop {
-            let response = arg.client.get(url.clone()).send().await;
-            match response {
-                Err(err) => {
-                    if remained > 0 {
-                        remained -= 1;
-                        continue;
-                    } else {
-                        return Err(Error::new(err))
-                    }
-                },
-                Ok(response) => {
-                    match response.status() {
-                        StatusCode::OK => {
-                            match response.text().await {
-                                Ok(t) => {
-                                    text = Ok(t);
-                                    break;
-                                },
-                                Err(err) => {
-                                    if remained > 0 {
-                                        remained -= 1;
-                                        continue;
-                                    } else {
-                                        return Err(Error::new(err))
-                                    }
-                                },
-                            }
-                        },
-                        code @ _ => {
-                            if remained > 0 {
-                                remained -= 1;
-                                continue;
-                            } else {
-                                text = Err(anyhow!("{}: {}", code, response.text().await?));
-                                break;
-                            }
-                        },
-                    }
-                }
-            }
-        }
-        text
-    }.context("ids::fetch")?;
+    let (text, status) = arg.client.get_text_status(url.clone()).await?;
+    if status != http::StatusCode::OK {
+        bail!("url: {}, status: {}", url, status);
+    }
     trace!("{} ms , ids::fetch({:?})", Instant::now().duration_since(now).as_millis(), url.as_str());
 
     let json: Value = serde_json::from_str(&text).map_err(|_| anyhow!("failed to parse json from: {}", text))?;
@@ -322,22 +283,16 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| env_logger::init());
-    }
 
     use term::Term;
 
     const PARAMS: &str = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
     const THREAD_LIMIT_NETWORK: usize = 1;
     const ITEMS_PER_PAGE: usize = 50;
-    const RETRY_COUNT: usize = 3;
 
     #[tokio::test]
     async fn it_works() -> Result<()> {
-        init();
+        test_helper::init();
 
         let diaps_ret_source = r#"{
           "last_stamp": 1593162840,
@@ -393,14 +348,13 @@ mod tests {
         let params = env::get("AVITO_PARAMS", PARAMS.to_owned())?;
         let thread_limit_network = env::get("AVITO_THREAD_LIMIT_NETWORK", THREAD_LIMIT_NETWORK)?;
         let items_per_page = env::get("AVITO_ITEMS_PER_PAGE", ITEMS_PER_PAGE)?;
-        let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
 
         let arg = Arg {
             params: &params,
             diaps_ret: &diaps_ret, 
             thread_limit_network,
             items_per_page,
-            retry_count,
+            client_provider: client::Provider::new(client::Kind::ViaProxy(rmq::get_pool())),
         };
         let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 

@@ -10,11 +10,11 @@ use std::path::{Path};
 use tokio::fs::{self, File};
 use tokio::prelude::*;
 
-use super::card::Card;
+use super::fetched::Fetched;
 
 pub struct Arg<'a> {
     pub id: u64,
-    pub card: Card,
+    pub fetched: Fetched,
     pub out_dir: &'a Path,
 }
 
@@ -27,7 +27,7 @@ pub async fn run<'a>(arg: Arg<'a>) -> Result<Ret> {
     }
 
     let mut file = File::create(file_path).await?;
-    let json = serde_json::to_string_pretty(&arg.card)?;
+    let json = serde_json::to_string_pretty(&arg.fetched)?;
     file.write_all(json.as_bytes()).await?;
 
     Ok(Ret())

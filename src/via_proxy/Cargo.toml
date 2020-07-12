@@ -1,0 +1,49 @@
+[package]
+name = "via_proxy"
+version = "0.1.0"
+authors = ["Yury Bikuzin <yury.bikuzin@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies]
+anyhow = "1.0"
+log = "0.4"
+
+url = "2.1.1"
+lazy_static = "1.4.0"
+# crossterm = "0.17.5"
+#
+rmq = { path = "../rmq" }
+req = { path = "../req" }
+res = { path = "../res" }
+lapin = "1.0.0"
+
+tokio = { version = "0.2", features = ["sync"] }
+# warp = "0.2"
+futures = { version = "0.3", features = [ "thread-pool" ] }
+# tokio-amqp = "0.1.0"
+# lapin = "1.0.0"
+# # deadpool-lapin = "0.5.0"
+# # deadpool = "0.5.1"
+# deadpool-lapin = { git = "https://github.com/bikeshedder/deadpool" }
+# deadpool = { git = "https://github.com/bikeshedder/deadpool" }
+# thiserror = "1.0.15"
+# serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.55"
+# reqwest = "0.10.6"
+http = "0.2.1"
+uuid = { version = "0.8", features = ["v4"] }
+# promising-future = "0.2.4"
+# amq-protocol-types = "6.0.0-rc9"
+#
+# json = { path = "../json" }
+promise = { path = "../promise" }
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
+pretty_env_logger = "0.4"
+
+
+# rand = "0.7.3"

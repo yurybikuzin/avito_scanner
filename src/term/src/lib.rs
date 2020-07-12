@@ -154,7 +154,7 @@ mod tests {
     use std::sync::Once;
     static INIT: Once = Once::new();
     fn init() {
-        INIT.call_once(|| env_logger::init());
+        INIT.call_once(|| pretty_env_logger::init());
     }
 
     // docker exec -it -e AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir -e RUST_LOG=info avito-proj cargo test -p term test_no_merge

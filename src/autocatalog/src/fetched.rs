@@ -341,7 +341,7 @@ mod tests {
     use std::sync::Once;
     static INIT: Once = Once::new();
     fn init() {
-        INIT.call_once(|| env_logger::init());
+        INIT.call_once(|| pretty_env_logger::init());
     }
 
     use tokio::fs::File;
@@ -361,7 +361,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_parse() -> Result<()> {
+    async fn test_parse_only() -> Result<()> {
         init();
 
         let mut file = File::open("test_data/page.html").await?;

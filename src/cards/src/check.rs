@@ -34,3 +34,30 @@ pub async fn run<'a>(arg: Arg<'a>) -> Result<Ret> {
     }
 }
 
+// ============================================================================
+// ============================================================================
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    #[allow(unused_imports)]
+    use log::{error, warn, info, debug, trace};
+    use super::*;
+
+    #[tokio::test]
+    async fn test_check() -> Result<()> {
+        test_helper::init();
+
+        let out_dir = &Path::new("out_test");
+        let id = 42;
+
+        let ret = run(Arg { out_dir, id }).await?;
+        assert_eq!(ret, Ret{id: Some(id)});
+
+        Ok(())
+    }
+
+}
+
+
+

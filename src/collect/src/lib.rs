@@ -179,7 +179,7 @@ where
                         match ret {
                             OpRet::ReadFile(ret) => {
                                 used_file_threads -= 1;
-                                if let cards::Card::Record(record) = ret {
+                                if let cards::Fetched::Record(record) = ret {
                                     items.adopt_record(record)?;
                                 }
 
@@ -305,17 +305,12 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| env_logger::init());
-    }
 
     use term::Term;
 
     #[tokio::test]
     async fn test_collect_records() -> Result<()> {
-        init();
+        test_helper::init();
 
         let arg = Arg { 
             out_dir: Path::new("/out"),
@@ -366,7 +361,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_collect_autocatalog() -> Result<()> {
-        init();
+        test_helper::init();
 
         let arg = Arg { 
             out_dir: Path::new("/out"),

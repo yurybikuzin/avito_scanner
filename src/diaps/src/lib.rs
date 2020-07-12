@@ -29,6 +29,8 @@ pub struct Arg<'a> {
 
     /// price_max_inc - Величина, используемая при формировании первичного значения верхней границы диапазона на основе значения нижней, например 1000000
     pub price_max_inc: isize,
+
+    pub client_provider: client::Provider,
 }
 
 // ============================================================================
@@ -141,7 +143,7 @@ pub async fn get<'a, Cb>(
 where 
     Cb: FnMut(CallbackArg) -> Result<()>,
 {
-    let Arg {params, count_limit, price_precision, price_max_inc} = arg;
+    let Arg {params, count_limit, price_precision, price_max_inc, client_provider} = arg;
 
     let start = Instant::now();
 
@@ -152,7 +154,7 @@ where
     let mut diaps: Vec<Diap> = vec![];
     let mut last_stamp: Option<u64> = None;
     let mut checks_total: usize = 0;
-    let client = reqwest::Client::new();
+    let client = client_provider.build().await?;
     let mut count_total: Option<u64> = None;
     loop {
         let mut checks: usize = 0;
@@ -166,7 +168,10 @@ where
                 match last_stamp { None => "".to_owned(), Some(last_stamp) => format!("&lastStamp={}", last_stamp) },
             );
             let url = Url::parse(&url)?;
-            let text = client.get(url).send().await?.text().await?;
+            let (text, status) = client.get_text_status(url.clone()).await?;
+            if status != http::StatusCode::OK {
+                bail!("url: {}, status: {}", url, status);
+            }
             checks += 1;
             checks_total += 1;
             let json: Value = serde_json::from_str(&text).map_err(|_| anyhow!("failed to parse json from: {}", text))?;
@@ -201,7 +206,7 @@ where
                 None
             };
 
-            // trace!("count: {:?}", count);
+            trace!("count: {:?}", count);
             if let Some(count) = count {
 
                 let (price_max_new, price_max_delta_new) = 
@@ -313,26 +318,34 @@ mod tests {
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    fn init() {
-        INIT.call_once(|| env_logger::init());
-    }
 
-    use env;
     const COUNT_LIMIT: u64 = 4900;
     const PRICE_PRECISION: isize = 20000;
     const PRICE_MAX_INC: isize = 1000000;
 
     use term::Term;
 
+    // docker exec -it -e RUST_LOG=diaps=trace -e AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir avito-proj cargo test -p diaps -- --nocapture
     #[tokio::test]
-    async fn it_works() -> Result<()> {
-        init();
+    async fn test_diaps() -> Result<()> {
+        test_helper::init();
+
+        let client_provider = client::Provider::new(client::Kind::Reqwest(1));
+        helper(client_provider).await?;
+
+        // let pool = rmq::get_pool();
+        // let client_provider = client::Provider::new(client::Kind::ViaProxy(pool));
+        // helper(client_provider).await?;
+
+        Ok(())
+    }
+
+    async fn helper(client_provider: client::Provider) -> Result<()> {
 
         let count_limit: u64 = env::get("AVITO_COUNT_LIMIT", COUNT_LIMIT)?;
         let price_precision: isize = env::get("AVITO_PRICE_PRECISION", PRICE_PRECISION)?;
         let price_max_inc: isize = env::get("AVITO_PRICE_MAX_INC", PRICE_MAX_INC)?;
+
 
         let params = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
         let arg = Arg { 
@@ -340,7 +353,9 @@ mod tests {
             count_limit, 
             price_precision, 
             price_max_inc,
+            client_provider,
         };
+
 
         let mut term = Term::init(term::Arg::new().header("Определение диапазонов цен . . ."))?;
         let start = Instant::now();

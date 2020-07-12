@@ -13,6 +13,7 @@ use serde::de::{self,
 // use std::time::Duration;
 #[derive(Debug)]
 pub struct Res {
+    pub correlation_id: uuid::Uuid,
     pub url_req: reqwest::Url,
     pub url_res: reqwest::Url,
     pub status: http::StatusCode,
@@ -22,13 +23,14 @@ pub struct Res {
 #[derive(Deserialize)]
 #[serde(field_identifier, rename_all = "snake_case")]
 enum Field { 
+    CorrelationId,
     UrlReq,
     UrlRes,
     Status,
     Text, 
 }
 
-const FIELDS: &'static [&'static str] = &["url_req", "url_res", "status", "text"];
+const FIELDS: &'static [&'static str] = &["correlation_id", "url_req", "url_res", "status", "text"];
 
 use serde::{Deserialize};
 impl Serialize for Res {
@@ -39,6 +41,9 @@ impl Serialize for Res {
         let mut state = serializer.serialize_struct("Res", FIELDS.len())?;
         for field in FIELDS {
             match *field {
+                "correlation_id" => {
+                    state.serialize_field("correlation_id", &self.correlation_id.to_string())?;
+                },
                 "url_req" => {
                     state.serialize_field("url_req", &self.url_req.as_str())?;
                 },
@@ -82,12 +87,23 @@ impl<'de> Visitor<'de> for ResVisitor {
     where
         V: MapAccess<'de>,
     {
+        let mut correlation_id = None;
         let mut url_req = None;
         let mut url_res = None;
         let mut status = None;
         let mut text = None;
         while let Some(key) = map.next_key()? {
             match key {
+                Field::CorrelationId => {
+                    if correlation_id.is_some() {
+                        return Err(de::Error::duplicate_field("correlation_id"));
+                    }
+                    let s: String = map.next_value()?;
+                    correlation_id = match uuid::Uuid::parse_str(&s) {
+                        Ok(uuid) => Some(uuid),
+                        Err(_) => return Err(de::Error::invalid_value(serde::de::Unexpected::Str(s.as_ref()), &"valid UUID")),
+                    };
+                }
                 Field::UrlReq => {
                     if url_req.is_some() {
                         return Err(de::Error::duplicate_field("url_req"));
@@ -126,11 +142,12 @@ impl<'de> Visitor<'de> for ResVisitor {
                 }
             }
         }
+        let correlation_id = correlation_id.ok_or_else(|| de::Error::missing_field("correlation_id"))?;
         let url_req = url_req.ok_or_else(|| de::Error::missing_field("url_req"))?;
         let url_res = url_res.ok_or_else(|| de::Error::missing_field("url_res"))?;
         let status = status.ok_or_else(|| de::Error::missing_field("status"))?;
         let text = text.ok_or_else(|| de::Error::missing_field("text"))?;
-        Ok(Res {url_req, url_res, status, text})
+        Ok(Res {correlation_id, url_req, url_res, status, text})
     }
 }
 
@@ -157,12 +174,15 @@ mod tests {
         init();
 
         let json = r#"{
+            "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+            "url_req": "https://bikuzin.baza-winner.ru/echo",
+            "url_res": "https://bikuzin.baza-winner.ru/echo",
             "status": 200,
             "text": "something"
         }"#;
         let req: Res = serde_json::from_str(json).unwrap();
         let tst = serde_json::to_string(&req).unwrap();
-        let eta = r#"{"status":200,"text":"something"}"#;
+        let eta = r#"{"correlation_id":"550e8400-e29b-41d4-a716-446655440000","url_req":"https://bikuzin.baza-winner.ru/echo","url_res":"https://bikuzin.baza-winner.ru/echo","status":200,"text":"something"}"#;
         assert_eq!(tst, eta);
 
         Ok(())
