@@ -127,7 +127,6 @@ impl Client {
                                                     method: http::Method::GET,
                                                     url,
                                                     timeout: None,
-                                                    no_proxy: None,
                                                 };
                                                 let payload = serde_json::to_string_pretty(&req)?;
                                                 trace!("before basic_publish");

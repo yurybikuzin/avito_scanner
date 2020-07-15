@@ -12,6 +12,11 @@ services:
 
             - BW_PROJ_NAME
             - RUST_LOG=info
+            - BW_RABBITMQ_USER=$BW_DEV_RABBITMQ_USER
+            - BW_RABBITMQ_PASS=$BW_DEV_RABBITMQ_PASS
+            - BW_RABBITMQ_HOST=$BW_DEV_RABBITMQ_HOST
+            - BW_RABBITMQ_PORT=$BW_DEV_RABBITMQ_PORT
+            - BW_RABBITMQ_VHOST=$BW_DEV_RABBITMQ_VHOST
         volumes:
             - ./dev/proj/sh:/sh
             - ./src:/home/rust/src
@@ -31,7 +36,11 @@ services:
             - TZ=Europe/Moscow
 
             - BW_PROJ_NAME
-            - RUST_LOG=proxy=info
+            - BW_RABBITMQ_USER=$BW_DEV_RABBITMQ_USER
+            - BW_RABBITMQ_PASS=$BW_DEV_RABBITMQ_PASS
+            - BW_RABBITMQ_HOST=$BW_DEV_RABBITMQ_HOST
+            - BW_RABBITMQ_PORT=$BW_DEV_RABBITMQ_PORT
+            - BW_RABBITMQ_VHOST=$BW_DEV_RABBITMQ_VHOST
         volumes:
             - ./dev/proxy/sh:/sh
             - ./src:/home/rust/src
@@ -48,8 +57,8 @@ services:
         container_name: ${BW_PROJ_NAME}-rmq
         image: rabbitmq:3.8.4-management
         environment:
-            RABBITMQ_DEFAULT_USER: rmq
-            RABBITMQ_DEFAULT_PASS: rmq
+            RABBITMQ_DEFAULT_USER: $BW_DEV_RABBITMQ_USER
+            RABBITMQ_DEFAULT_PASS: $BW_DEV_RABBITMQ_PASS
         ports:
             - $BW_DEV_RABBITMQ_PORT:5672
             - $BW_DEV_RABBITMQ_PORT_MANAGEMENT:15672

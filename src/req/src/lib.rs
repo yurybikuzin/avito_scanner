@@ -17,7 +17,7 @@ pub struct Req {
     pub method: reqwest::Method,
     pub url: reqwest::Url,
     pub timeout: Option<Duration>,
-    pub no_proxy: Option<bool>,
+    // pub no_proxy: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -28,10 +28,12 @@ enum Field {
     Method, 
     Url, 
     Timeout,
-    NoProxy,
+    // NoProxy,
 }
 
-const FIELDS: &'static [&'static str] = &["correlation_id", "reply_to", "method", "url", "timeout", "no_proxy"];
+const FIELDS: &'static [&'static str] = &["correlation_id", "reply_to", "method", "url", "timeout"
+// , "no_proxy"
+];
 
 use serde::{Deserialize};
 impl Serialize for Req {
@@ -71,11 +73,11 @@ impl Serialize for Req {
                         state.serialize_field("timeout", &timeout.as_secs())?;
                     }
                 },
-                "no_proxy" => {
-                    if let Some(no_proxy) = &self.no_proxy {
-                        state.serialize_field("no_proxy", &no_proxy)?;
-                    }
-                },
+                // "no_proxy" => {
+                //     if let Some(no_proxy) = &self.no_proxy {
+                //         state.serialize_field("no_proxy", &no_proxy)?;
+                //     }
+                // },
                 _ => {
                     return Err(serde::ser::Error::custom(format!("unreachable for unknown field {}", field)));
                 },
@@ -112,7 +114,6 @@ impl<'de> Visitor<'de> for ReqVisitor {
         let mut method = None;
         let mut url = None;
         let mut timeout = None;
-        let mut no_proxy = None;
         while let Some(key) = map.next_key()? {
             match key {
                 Field::CorrelationId => {
@@ -165,19 +166,19 @@ impl<'de> Visitor<'de> for ReqVisitor {
                     }
                     timeout = Some( Duration::from_secs(map.next_value()? ));
                 }
-                Field::NoProxy => {
-                    if no_proxy.is_some() {
-                        return Err(de::Error::duplicate_field("no_proxy"));
-                    }
-                    no_proxy = Some(map.next_value()?);
-                }
+                // Field::NoProxy => {
+                //     if no_proxy.is_some() {
+                //         return Err(de::Error::duplicate_field("no_proxy"));
+                //     }
+                //     no_proxy = Some(map.next_value()?);
+                // }
             }
         }
         let correlation_id = correlation_id.ok_or_else(|| de::Error::missing_field("correlation_id"))?;
         let reply_to = reply_to.ok_or_else(|| de::Error::missing_field("reply_to"))?;
         let method = method.ok_or_else(|| de::Error::missing_field("method"))?;
         let url = url.ok_or_else(|| de::Error::missing_field("url"))?;
-        Ok(Req {correlation_id, reply_to, method, url, timeout, no_proxy})
+        Ok(Req {correlation_id, reply_to, method, url, timeout})
     }
 }
 
@@ -208,12 +209,11 @@ mod tests {
             "reply_to": "response",
             "method": "GET",
             "url": "https://bikuzin.baza-winner.ru/echo",
-            "timeout": 5,
-            "no_proxy": true
+            "timeout": 5
         }"#;
         let req: Req = serde_json::from_str(json).unwrap();
         let tst = serde_json::to_string(&req).unwrap();
-        let eta = r#"{"correlation_id":"550e8400-e29b-41d4-a716-446655440000","reply_to":"response","method":"GET","url":"https://bikuzin.baza-winner.ru/echo","timeout":5,"no_proxy":true}"#;
+        let eta = r#"{"correlation_id":"550e8400-e29b-41d4-a716-446655440000","reply_to":"response","method":"GET","url":"https://bikuzin.baza-winner.ru/echo","timeout":5}"#;
         assert_eq!(tst, eta);
 
         let json = r#"{
@@ -248,7 +248,7 @@ mod tests {
         }"#;
         let err = serde_json::from_str::<Req>(json).unwrap_err();
         let tst = format!("{}", err);
-        let eta = r#"unknown field `proxy`, expected one of `correlation_id`, `reply_to`, `method`, `url`, `timeout`, `no_proxy` at line 6 column 19"#.to_owned();
+        let eta = r#"unknown field `proxy`, expected one of `correlation_id`, `reply_to`, `method`, `url`, `timeout` at line 6 column 19"#.to_owned();
         assert_eq!(tst, eta); 
 
         Ok(())

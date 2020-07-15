@@ -15,5 +15,5 @@ arrange_millis = { path = "../arrange_millis" }
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
-auth = { path = "../auth" }
 test_helper = { path = "../test_helper" }
+auth = { path = "../auth" }

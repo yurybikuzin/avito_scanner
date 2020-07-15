@@ -13,17 +13,17 @@ mod handlers;
 // mod rmq;
 mod error;
 mod queue;
-
+//
 #[tokio::main]
 async fn main() -> Result<()> {
     if env::var("RUST_LOG").is_err() {
         // Set `RUST_LOG=todos=debug` to see debug logs,
         // this only shows access logs.
-        env::set_var("RUST_LOG", "rmq=info");
+        env::set_var("RUST_LOG", "proxy=trace");
     }
     pretty_env_logger::init();
 
-    let pool = rmq::get_pool();
+    let pool = rmq::get_pool()?;
 
     let routes = api::api(pool.clone());
 

@@ -14,14 +14,15 @@ use std::time::Instant;
 
 const DIAP_STORE_FILE_SPEC: &str = "/out/diaps.json";
 const DIAP_FRESH_DURATION: usize = 1440; //30; // minutes
-const COUNT_LIMIT: u64 = 4900;
+// const COUNT_LIMIT: u64 = 1000;
+const COUNT_LIMIT: u64 = 1000;
 const PRICE_PRECISION: isize = 20000;
 const PRICE_MAX_INC: isize = 1000000;
 
 const ID_STORE_FILE_SPEC: &str = "/out/ids.json";
 const ID_FRESH_DURATION: usize = 1440; //30; // minutes
 const PARAMS: &str = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
-const THREAD_LIMIT_NETWORK: usize = 1;
+const THREAD_LIMIT_NETWORK: usize = 50;
 const THREAD_LIMIT_FILE: usize = 2;
 const ITEMS_PER_PAGE: usize = 50;
 // const RETRY_COUNT: usize = 3;
@@ -33,6 +34,10 @@ use term::Term;
 #[tokio::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
+
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "proxy=warn");
+    }
 
     let params = env::get("AVITO_PARAMS", PARAMS.to_owned())?;
     let id_store_file_spec= &Path::new(ID_STORE_FILE_SPEC);
@@ -48,7 +53,7 @@ async fn main() -> Result<()> {
     let thread_limit_network = env::get("AVITO_THREAD_LIMIT_NETWORK", THREAD_LIMIT_NETWORK)?;
     let thread_limit_file = env::get("AVITO_THREAD_LIMIT_FILE", THREAD_LIMIT_FILE)?;
     // let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
-    let client_provider = client::Provider::new(client::Kind::ViaProxy(rmq::get_pool()));
+    let client_provider = client::Provider::new(client::Kind::ViaProxy(rmq::get_pool()?));
 
     let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 
@@ -72,7 +77,8 @@ async fn main() -> Result<()> {
                 count_limit,
                 price_precision,
                 price_max_inc,
-                client_provider: client_provider.clone(),
+                client_provider: client::Provider::new(client::Kind::Reqwest(3)),
+                // client_provider: client_provider.clone(),
             };
 
             let diap_store = DiapStore::from_file(diap_store_file_spec).await;
