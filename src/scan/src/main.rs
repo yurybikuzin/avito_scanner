@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
     pretty_env_logger::init();
 
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "proxy=warn");
+        std::env::set_var("RUST_LOG", "warn");
     }
 
     let params = env::get("AVITO_PARAMS", PARAMS.to_owned())?;
@@ -53,7 +53,11 @@ async fn main() -> Result<()> {
     let thread_limit_network = env::get("AVITO_THREAD_LIMIT_NETWORK", THREAD_LIMIT_NETWORK)?;
     let thread_limit_file = env::get("AVITO_THREAD_LIMIT_FILE", THREAD_LIMIT_FILE)?;
     // let retry_count = env::get("AVITO_RETRY_COUNT", RETRY_COUNT)?;
-    let client_provider = client::Provider::new(client::Kind::ViaProxy(rmq::get_pool()?));
+    //
+    //
+    let queue_uuid = uuid::Uuid::new_v4();
+    let queue_name = format!("response-{}", queue_uuid);
+    let client_provider = client::Provider::new(client::Kind::ViaProxy(rmq::get_pool()?, queue_name));
 
     let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 

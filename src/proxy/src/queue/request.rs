@@ -117,24 +117,37 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
         // то отправляем команду "load_list" (загрузить списки прокси на проверку)
         // и принимаем проверенные прокси из раббита
         let consumer_proxies_to_use_next_fut = if proxy_urls.len() < reqs.len() {
-            super::cmd::publish_load_list(&channel).await?;
+            // super::cmd::publish_load_list(&channel).await?;
             consumer_proxies_to_use.next().fuse()
         } else {
             Fuse::terminated()
         };
         pin_mut!(consumer_proxies_to_use_next_fut);
 
-        // Если свободных прокси не хватает для поступивших запросов и поднят флаг "очередь прокси
-        // заполняется" заводим будильник на 5 секунд, чтобы через 5 секунд 
-        // проверить, не опустился ли флаr (тогда отправим команду "load_list" или придут
-        // проверенные прокси
-        let consumer_timeout_fut = if proxy_urls.len() < reqs.len() && STATE_PROXIES_TO_USE.load(Ordering::Relaxed) == STATE_PROXIES_TO_USE_FILLED {
-            trace!("tokio::time::delay_for due to STATE_PROXIES_TO_USE_FILLED");
-            tokio::time::delay_for(std::time::Duration::from_secs(5)).fuse()
+        let consumer_timeout_fut = if proxy_hosts.len() < PROXIES_TO_USE_MIN_COUNT.load(Ordering::Relaxed) as usize {
+            super::cmd::publish_load_list(&channel).await?;
+            if STATE_PROXIES_TO_USE.load(Ordering::Relaxed) == STATE_PROXIES_TO_USE_FILLED {
+                trace!("tokio::time::delay_for due to STATE_PROXIES_TO_USE_FILLED");
+                tokio::time::delay_for(std::time::Duration::from_secs(5)).fuse()
+            } else {
+                Fuse::terminated()
+            }
         } else {
             Fuse::terminated()
         };
         pin_mut!(consumer_timeout_fut);
+
+        // Если свободных прокси не хватает для поступивших запросов и поднят флаг "очередь прокси
+        // заполняется" заводим будильник на 5 секунд, чтобы через 5 секунд 
+        // проверить, не опустился ли флаr (тогда отправим команду "load_list" или придут
+        // проверенные прокси )
+        // let consumer_timeout_fut = if proxy_urls.len() < reqs.len() && STATE_PROXIES_TO_USE.load(Ordering::Relaxed) == STATE_PROXIES_TO_USE_FILLED {
+        //     trace!("tokio::time::delay_for due to STATE_PROXIES_TO_USE_FILLED");
+        //     tokio::time::delay_for(std::time::Duration::from_secs(5)).fuse()
+        // } else {
+        //     Fuse::terminated()
+        // };
+        // pin_mut!(consumer_timeout_fut);
 
         select! {
             // прозвенел будильник, сбрасываем флаг STATE_PROXIES_TO_USE до STATE_PROXIES_TO_USE_NONE

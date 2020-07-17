@@ -70,8 +70,8 @@ struct Res {
 
 use tokio::sync::mpsc;
 impl Client {
-    pub async fn new(pool: rmq::Pool) -> Result<Self> {
-        Self::new_special(pool, "response".to_owned()).await
+    pub async fn new(pool: rmq::Pool, queue_name: String) -> Result<Self> {
+        Self::new_special(pool, queue_name).await
     }
     pub async fn new_special(pool: rmq::Pool, reply_to: String) -> Result<Self> {
         let mut brokers = BROKERS.lock().unwrap();

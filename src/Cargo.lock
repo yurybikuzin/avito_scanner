@@ -69,12 +69,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ansi-escapes"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "163bff5f88583fe2d90e3002ea2a3b613c93b5e3eb84daf7fd539032e32a68b3"
-
-[[package]]
 name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2050,7 +2044,6 @@ checksum = "ef703b7cb59335eae2eb93ceb664c0eb7ea6bf567079d843e09420219668e072"
 name = "scan"
 version = "0.1.0"
 dependencies = [
- "ansi-escapes",
  "anyhow",
  "arrange_millis",
  "auth",
@@ -2069,6 +2062,7 @@ dependencies = [
  "term",
  "to_csv",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

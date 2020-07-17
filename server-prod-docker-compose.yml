@@ -1,0 +1,44 @@
+version: '3'
+
+services:
+
+    # auth:
+    #     container_name: prod-${BW_PROJ_NAME}-auth
+    #     image: bazawinner/prod-${BW_PROJ_NAME}-auth:${BW_PROD_AUTH_VERSION}
+    #     tty: true
+    #     environment:
+    #         - TZ=Europe/Moscow
+    #     volumes:
+    #         - ./out:/proj/out
+    #     ports:
+    #         - $BW_PROD_AUTH_PORT:3000
+
+    proxy:
+        container_name: prod-${BW_PROJ_NAME}-proxy
+        image: bazawinner/prod-${BW_PROJ_NAME}-proxy:${BW_PROD_PROXY_VERSION}
+        tty: true
+        environment:
+            - TZ=Europe/Moscow
+            - BW_RABBITMQ_USER=$BW_PROD_RABBITMQ_USER
+            - BW_RABBITMQ_PASS=$BW_PROD_RABBITMQ_PASS
+            - BW_RABBITMQ_HOST=rmq
+            - BW_RABBITMQ_PORT=5672
+            - BW_RABBITMQ_VHOST=$BW_PROD_RABBITMQ_VHOST
+        # volumes:
+        #     - ./out:/proj/out
+        ports:
+            - $BW_PROD_PROXY_PORT:8000
+        depends_on:
+            - rmq
+
+    rmq:
+        container_name: prod-${BW_PROJ_NAME}-rmq
+        image: rabbitmq:3.8.4-management
+        environment:
+            RABBITMQ_DEFAULT_USER: $BW_PROD_RABBITMQ_USER
+            RABBITMQ_DEFAULT_PASS: $BW_PROD_RABBITMQ_PASS
+        ports:
+            - $BW_PROD_RABBITMQ_PORT:5672
+            - $BW_PROD_RABBITMQ_PORT_MANAGEMENT:15672
+
+

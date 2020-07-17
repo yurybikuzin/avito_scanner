@@ -38,8 +38,8 @@ services:
             - BW_PROJ_NAME
             - BW_RABBITMQ_USER=$BW_DEV_RABBITMQ_USER
             - BW_RABBITMQ_PASS=$BW_DEV_RABBITMQ_PASS
-            - BW_RABBITMQ_HOST=$BW_DEV_RABBITMQ_HOST
-            - BW_RABBITMQ_PORT=$BW_DEV_RABBITMQ_PORT
+            - BW_RABBITMQ_HOST=rmq
+            - BW_RABBITMQ_PORT=5672
             - BW_RABBITMQ_VHOST=$BW_DEV_RABBITMQ_VHOST
         volumes:
             - ./dev/proxy/sh:/sh
@@ -60,7 +60,7 @@ services:
             RABBITMQ_DEFAULT_USER: $BW_DEV_RABBITMQ_USER
             RABBITMQ_DEFAULT_PASS: $BW_DEV_RABBITMQ_PASS
         ports:
-            - $BW_DEV_RABBITMQ_PORT:5672
+            # - $BW_DEV_RABBITMQ_PORT:5672
             - $BW_DEV_RABBITMQ_PORT_MANAGEMENT:15672
 
     auth:

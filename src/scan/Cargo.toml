@@ -14,7 +14,8 @@ anyhow = "1.0"
 pretty_env_logger = "0.4"
 tokio = { version = "0.2", features = ["rt-threaded", "macros", "fs"] }
 chrono = "0.4.11"
-ansi-escapes = "0.1"
+# ansi-escapes = "0.1"
+uuid = { version = "0.8", features = ["v4"] }
 
 env = { path = "../env" }
 term = { path = "../term" }

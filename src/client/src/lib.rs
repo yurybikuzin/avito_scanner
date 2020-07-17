@@ -13,7 +13,7 @@ pub enum Client {
 #[derive(Clone)]
 pub enum Kind {
     Reqwest(usize),
-    ViaProxy(rmq::Pool),
+    ViaProxy(rmq::Pool, String),
 }
 
 #[derive(Clone)]
@@ -33,8 +33,8 @@ impl Provider {
                     client: reqwest::Client::new(),
                 }) )
             },
-            Kind::ViaProxy(poll) => {
-                Ok( Client::ViaProxy( via_proxy::Client::new(poll.clone()).await? ) )
+            Kind::ViaProxy(poll, queue_name) => {
+                Ok( Client::ViaProxy( via_proxy::Client::new(poll.clone(), queue_name.to_owned()).await? ) )
             },
         }
     }

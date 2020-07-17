@@ -1,20 +1,18 @@
-# Сканер Авито (Rust and NodeJS::Puppeeteer)
+# Сканер Авито 
 
 <!-- vim-markdown-toc Redcarpet -->
 
 * [О программе](#о-программе)
-* [Подготовка рабочего места](#подготовка-рабочего-места)
+* [Использование](#использование)
     * [Требуемые программы](#требуемые-программы)
         * [Git](#git)
         * [Docker](#docker)
         * [Docker-Compose](#docker-compose)
     * [Репозиторий](#репозиторий)
-* [Использование](#использование)
-    * [Быстро и просто](#быстро-и-просто)
-            * [Завершение работы](#завершение-работы)
-    * [Долго и надежно](#долго-и-надежно)
-            * [Завершение работы](#завершение-работы)
-* [Разработка](#разработка)
+    * [Сканирование](#сканирование)
+    * [Результат](#результат)
+    * [Завершение работы](#завершение-работы)
+* [Разработка (TO BE UPDATED)](#разработка-to-be-updated)
     * [Подготовка](#подготовка)
     * [Доступные команды](#доступные-команды)
         * [Получение *AVITO_AUTH*](#получение-avito_auth)
@@ -22,8 +20,8 @@
         * [cargo test](#cargo-test)
         * [cargo run](#cargo-run)
         * [Завершение работы](#завершение-работы)
-* [Процедура сборки](#процедура-сборки)
-* [Files](#files)
+* [Процедура сборки (TO BE UPDATED)](#процедура-сборки-to-be-updated)
+* [Files (TO BE UPDATED)](#files-to-be-updated)
 * [Fairplay](#fairplay)
 
 <!-- vim-markdown-toc -->
@@ -32,9 +30,9 @@
 
 Сканер объявлений c Авито из раздела Автомобили
 
-## Подготовка рабочего места
+## Использование
 
-Необходимо убедиться, что установлены, и при отсутствии установить следующие программы:
+Перед использованием необходимо убедиться в наличии или установить требуемые программы
 
 ### Требуемые программы
 
@@ -54,7 +52,7 @@ https://docs.docker.com/compose/install
 
 ### Репозиторий
 
-Также необходимо развернуть репозиторий проекта в папку `avito`:
+Перед использованием также необходимо развернуть репозиторий проекта в папку `avito`:
 
 ```
 git clone git@github.com:yurybikuzin/avito_scanner.git avito
@@ -68,43 +66,25 @@ cd avito
 
 Все следующие команды следует выполнять из корневой папки проекта
 
-## Использование
-
-### Быстро и просто
-
-В этом случае будет скачана программа размером ~21.3MB (мегабайт)
+### Сканирование
 
 ```
-AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir docker-compose -f simple-prod-docker-compose.yml up -d
+docker-compose -f prod-docker-compose.yml up -d
 
-docker exec -it -e RUST_LOG=warn prod-avito-proj scan
+docker exec -it prod-avito-proj scan
 ```
 
-Результат работы программы будет помещен в папку `out`
+### Результат
 
-##### Завершение работы
+Результат работы программы будет помещен в файл `out/records.csv`
+
+### Завершение работы
 
 ```
 docker-compose -f simple-prod-docker-compose.yml down
 ```
 
-### Долго и надежно
-
-В случае, если ключ авторизации (`AVITO_AUTH`) не подойдет, придется скачать программу размером ~1.35GB (гигабайт!)
-
-```
-docker-compose -f full-prod-docker-compose.yml up -d
-
-docker exec -it prod-avito-proj scan
-```
-
-##### Завершение работы
-
-```
-docker-compose -f full-prod-docker-compose.yml down
-```
-
-## Разработка
+## Разработка (TO BE UPDATED)
 
 ### Подготовка
 
@@ -147,7 +127,7 @@ docker exec -it avito-proj cargo run
 docker-compose down
 ```
 
-## Процедура сборки
+## Процедура сборки (TO BE UPDATED)
 
 Процедура заключается в независимой сборке *docker image* для двух сервисов: `proj` и `auth`
 
@@ -166,7 +146,7 @@ docker-compose down
 
 После успешной сборки необходимо отразить в файле `prod.yml` версию, указанную в файле `.env` (BW_PROD_СЕРВИС_VERSION)
 
-## Files
+## Files (TO BE UPDATED)
 
 - `README.md` - этот файл
 - `.gitignore` - см. https://git-scm.com/docs/gitignore
