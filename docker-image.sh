@@ -112,7 +112,7 @@ fi
 
 echo target: $target
 echo service: $service
-env $(cat .env | grep -v '#' | xargs) bash -c '\
+env $(cat .env prod.env | grep -v '#' | xargs) bash -c '\
     tag=bazawinner/'$target'-$BW_PROJ_NAME-'$service':$BW_'$TARGET'_'$SERVICE'_VERSION
     echo Building $tag . . .
     docker build '${opts[@]}' \

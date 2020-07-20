@@ -34,20 +34,20 @@ struct CmdError<'a> {
     msg: String,
 }
 
-pub async fn publish_load_list(channel: &Channel) -> Result<()> {
-    if 
-        STATE_PROXIES_TO_CHECK.load(Ordering::Relaxed) == STATE_PROXIES_TO_CHECK_NONE ||
-        STATE_PROXIES_TO_USE.load(Ordering::Relaxed) == STATE_PROXIES_TO_USE_NONE ||
-        false
-    {
-        let queue_name = "cmd";
-        let _queue = get_queue(channel, queue_name).await?;
-        basic_publish(channel, queue_name, "load_list").await?;
-    } else {
-        trace!("cmd load_list ignored due to STATE_PROXIES_TO_CHECK/USE is not NONE");
-    }
-    Ok(())
-}
+// pub async fn publish_load_list(channel: &Channel) -> Result<()> {
+//     if 
+//         STATE_PROXIES_TO_CHECK.load(Ordering::Relaxed) == STATE_PROXIES_TO_CHECK_NONE ||
+//         STATE_PROXIES_TO_USE.load(Ordering::Relaxed) == STATE_PROXIES_TO_USE_NONE ||
+//         false
+//     {
+//         let queue_name = "cmd";
+//         let _queue = get_queue(channel, queue_name).await?;
+//         basic_publish(channel, queue_name, "load_list").await?;
+//     } else {
+//         trace!("cmd load_list ignored due to STATE_PROXIES_TO_CHECK/USE is not NONE");
+//     }
+//     Ok(())
+// }
 
 use std::sync::atomic::{Ordering, AtomicU8};
 pub static IS_LOADED_LIST: AtomicU8 = AtomicU8::new(0);//secs
@@ -85,7 +85,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     while let Some(delivery) = consumer.next().await {
         trace!("delivery: {:?}", delivery);
         if let Ok((channel, delivery)) = delivery {
-
+ 
             let cmd = std::str::from_utf8(&delivery.data).unwrap();
             trace!("got {}", cmd);
             match cmd {

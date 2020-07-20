@@ -125,7 +125,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
         pin_mut!(consumer_proxies_to_use_next_fut);
 
         let consumer_timeout_fut = if proxy_hosts.len() < PROXIES_TO_USE_MIN_COUNT.load(Ordering::Relaxed) as usize {
-            super::cmd::publish_load_list(&channel).await?;
+            // super::cmd::publish_load_list(&channel).await?;
             if STATE_PROXIES_TO_USE.load(Ordering::Relaxed) == STATE_PROXIES_TO_USE_FILLED {
                 trace!("tokio::time::delay_for due to STATE_PROXIES_TO_USE_FILLED");
                 tokio::time::delay_for(std::time::Duration::from_secs(5)).fuse()

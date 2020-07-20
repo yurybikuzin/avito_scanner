@@ -59,18 +59,18 @@ https://docs.docker.com/compose/install
 git clone git@github.com:yurybikuzin/avito_scanner.git avito
 ```
 
-и перейти в корневую папку проекта:
+и перейти в папку `prod` проекта:
 
 ```
-cd avito
+cd avito/prod
 ```
 
-Все следующие команды следует выполнять из корневой папки проекта
+Все следующие команды следует выполнять из папки `prod` проекта
 
 ### Сканирование
 
 ```
-docker-compose -f prod-docker-compose.yml up -d
+docker-compose up -d
 
 docker exec -it prod-avito-proj scan
 ```
@@ -92,17 +92,21 @@ docker exec -it prod-avito-proj scan
 
 30,000 объявлений (это примерный объем количества объявлений в Москве) будут отсканированы в течение 4 часов 
 
+52,000 объявлений (это примерный объем количества объявлений в Москве и в 100 километровой окрестности) будут отсканированы в течение 6 часов 
+
 ### Завершение работы
 
 ```
-docker-compose -f simple-prod-docker-compose.yml down
+docker-compose down
 ```
 
 ## Разработка (TO BE UPDATED)
 
+Разработка ведется в корневой папке проекта
+
 ### Подготовка
 
-Сначала необходимо *поднять* docker-container'ы для разработки: 
+Сначала необходимо *поднять* docker-container'ы для разработки в корневой папке проекта: 
 
 ```
 docker-compose up -d 
@@ -133,7 +137,6 @@ docker exec -it -e AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir -e RU
 ```
 docker exec -it avito-proj cargo run
 ```
-
 
 #### Завершение работы
 
