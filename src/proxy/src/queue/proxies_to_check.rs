@@ -84,7 +84,10 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
             },
             ret = fut_queue.select_next_some() => {
                 match ret {
-                    Err(_) => unreachable!(),
+                    Err(_) => {
+                        error!("unreachable at proxies_to_check.rs:88");
+                        unreachable!();
+                    },
                     Ok(ret) => {
                         match ret {
                             OpRet::Check(check::Ret{status, opt}) => {

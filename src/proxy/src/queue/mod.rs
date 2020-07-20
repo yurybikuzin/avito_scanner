@@ -17,7 +17,7 @@ pub static STATE_PROXIES_TO_USE: AtomicU8 = AtomicU8::new(STATE_PROXIES_TO_USE_N
 pub static PROXY_TIMEOUT: AtomicU8 = AtomicU8::new(30);//secs
 pub static PROXIES_TO_USE_MIN_COUNT: AtomicU32 = AtomicU32::new(50);
 pub static OWN_IP_FRESH_DURATION: AtomicU8 = AtomicU8::new(10);//secs
-pub static SAME_TIME_PROXY_CHECK_MAX: AtomicU16 = AtomicU16::new(300);
+pub static SAME_TIME_PROXY_CHECK_MAX: AtomicU16 = AtomicU16::new(50);
 
 pub static SAME_TIME_REQUEST_MAX: AtomicU16 = AtomicU16::new(50);
 pub static RESPONSE_TIMEOUT: AtomicU8 = AtomicU8::new(30);//secs

@@ -24,8 +24,6 @@ services:
             - BW_RABBITMQ_HOST=rmq
             - BW_RABBITMQ_PORT=5672
             - BW_RABBITMQ_VHOST=$BW_PROD_RABBITMQ_VHOST
-        # volumes:
-        #     - ./out:/proj/out
         ports:
             - $BW_PROD_PROXY_PORT:8000
         depends_on:

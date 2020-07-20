@@ -221,6 +221,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
             ret = fut_queue.select_next_some() => {
                 match ret {
                     Err(_) => {
+                        error!("unreachable at request.rs:224");
                         unreachable!();
                     },
                     Ok(ret) => {
