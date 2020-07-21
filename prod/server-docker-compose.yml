@@ -19,6 +19,7 @@ services:
         tty: true
         environment:
             - TZ=Europe/Moscow
+            - RUST_LOG=proxy=trace,queue=trace
             - BW_RABBITMQ_USER=$BW_PROD_RABBITMQ_USER
             - BW_RABBITMQ_PASS=$BW_PROD_RABBITMQ_PASS
             - BW_RABBITMQ_HOST=rmq
@@ -38,5 +39,3 @@ services:
         ports:
             - $BW_PROD_RABBITMQ_PORT:5672
             - $BW_PROD_RABBITMQ_PORT_MANAGEMENT:15672
-
-

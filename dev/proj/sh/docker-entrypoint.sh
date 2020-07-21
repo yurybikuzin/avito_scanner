@@ -2,10 +2,10 @@
 set -e
 echo "Иницализация контейнера '$BW_PROJ_NAME-proj'. . ."
 
-sudo chown -R rust:rust \
-    /home/rust/.cargo/git \
-    /home/rust/.cargo/registry \
-    /home/rust/src/target \
+chown -R root \
+    /usr/local/cargo/git \
+    /usr/local/cargo/registry \
+    /src/target \
     /out
 
 cat <<USAGE 

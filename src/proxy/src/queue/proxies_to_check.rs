@@ -282,7 +282,7 @@ pub async fn get_own_ip() -> Result<OwnIp> {
 }
 
 pub async fn get_ip(client: reqwest::Client) -> Result<String> {
-    let url = "https://bikuzin.baza-winner.ru/echo";
+    let url = "https://bikuzin18.baza-winner.ru/echo";
     let text = client.get(url)
         .send()
         .await?

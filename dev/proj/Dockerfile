@@ -2,9 +2,18 @@ ARG BW_DEV_PROJ_DOCKER_IMAGE
 ARG BW_DEV_PROJ_DOCKER_TAG
 FROM ${BW_DEV_PROJ_DOCKER_IMAGE}:${BW_DEV_PROJ_DOCKER_TAG}
 
+# RUN true && \
+#     sudo apt-get update && \
+#     sudo apt-get install -y \
+#          dumb-init \
+#         # libssl-dev \
+#         # pkg-config \
+#     && \
+# true
+
 RUN true && \
-    sudo apt-get update && \
-    sudo apt-get install -y \
+    apt-get update && \
+    apt-get install -y \
          dumb-init \
         # libssl-dev \
         # pkg-config \

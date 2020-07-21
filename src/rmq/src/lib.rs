@@ -1,4 +1,9 @@
 #[allow(unused_imports)]
+use log::{error, warn, info, debug, trace};
+// #[allow(unused_imports)]
+// use anyhow::{Result, Error, bail, anyhow};
+
+#[allow(unused_imports)]
 use anyhow::{anyhow, bail, Result, Error, Context};
 use lapin::{
     Queue, Channel, Consumer,
@@ -30,6 +35,7 @@ pub fn get_pool() -> Result<Pool> {
     let vhost = std::env::var("BW_RABBITMQ_VHOST").context("BW_RABBITMQ_VHOST")?;
     // let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| "amqp://rmq:rmq@rmq:5672/%2f".into());
     let addr = format!("amqp://{}:{}@{}:{}/{}", user, pass, host, port, vhost);
+    info!("addr: {}", addr);
     let manager = Manager::new(addr, ConnectionProperties::default().with_tokio());
     Ok(deadpool::managed::Pool::new(manager, 10))
 }

@@ -9,9 +9,9 @@ services:
         environment:
             - TZ=Europe/Moscow
             - RUST_LOG=warn
-            - AVITO_COUNT_LIMIT=4000
+            - AVITO_COUNT_LIMIT=$BW_AVITO_COUNT_LIMIT
             - AVITO_AUTH=$BW_AVITO_AUTH
-            - AVITO_PARAMS=categoryId=9&locationId=637640&searchRadius=100&privateOnly=1&sort=date&owner[]=private
+            - AVITO_PARAMS=$BW_AVITO_PARAMS
             - BW_RABBITMQ_USER=$BW_PROD_RABBITMQ_USER
             - BW_RABBITMQ_PASS=$BW_PROD_RABBITMQ_PASS
             - BW_RABBITMQ_HOST=$BW_PROD_RABBITMQ_HOST
