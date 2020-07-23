@@ -17,6 +17,8 @@ warp = "0.2"
 futures = { version = "0.3", default-features = false, features = ["thread-pool"] }
 tokio-amqp = "0.1.0"
 lapin = "1.0.0"
+structopt = "0.3.15"
+config = "0.10.1"
 # deadpool-lapin = "0.5.0"
 # deadpool = "0.5.1"
 deadpool-lapin = { git = "https://github.com/bikeshedder/deadpool" }

@@ -49,8 +49,15 @@ struct ProxyError {
     msg: String,
 }
 
-use super::*;
+// use super::*;
 use std::collections::HashSet;
+
+mod fetch_source;
+
+mod reuse_proxy; 
+
+mod fetch_req;
+
 
 macro_rules! get_receiver {
     ($receiver: ident, $consumer: expr, $kind: expr, $thread_pool: expr) => {
@@ -641,50 +648,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     Ok(())
 }
 
-mod check_proxy {
-    #[allow(unused_imports)]
-    use log::{error, warn, info, debug, trace};
-    #[allow(unused_imports)]
-    use anyhow::{anyhow, bail, Result, Error, Context};
-
-    pub struct Arg {
-        pub client: reqwest::Client,
-        pub own_ip: String,
-        pub opt: Opt,
-    }
-
-    pub struct Ret {
-        pub status: Status,
-        pub opt: Opt,
-    }
-
-    pub struct Opt {
-        pub url: String,
-        // pub host: String,
-    }
-
-    pub enum Status {
-        Ok{latency: u128},
-        NonAnon,
-        Err(Error),
-    }
-
-    pub async fn run(arg: Arg) -> Ret {
-        let start = std::time::Instant::now();
-        let status = match super::get_ip(arg.client).await {
-            Err(err) => Status::Err(err),
-            Ok(ip) => if ip != arg.own_ip {
-                Status::Ok{ latency: std::time::Instant::now().duration_since(start).as_millis() }
-            } else {
-                Status::NonAnon
-            },
-        };
-        Ret{
-            status,
-            opt: arg.opt,
-        }
-    }
-}
+mod check_proxy;
 
 use std::time::Instant;
 pub struct OwnIp {
@@ -778,201 +742,6 @@ mod op {
         }
     }
 }
-
-mod fetch_source {
-    #[allow(unused_imports)]
-    use log::{error, warn, info, debug, trace};
-    #[allow(unused_imports)]
-    use anyhow::{anyhow, bail, Result, Error, Context};
-
-    pub struct Arg {
-        pub client: reqwest::Client,
-        pub source: String,
-    }
-
-    pub struct Ret {
-        pub arg: Arg,
-        pub result: Result<HashSet<String>>,
-    }
-
-    pub async fn run(arg: Arg) -> Ret {
-        let response = match arg.client.get(&arg.source).send().await {
-            Err(err) => return Ret {arg, result: Err(anyhow!(err))},
-            Ok(response) => response,
-        };
-        let text = match response.text().await {
-            Err(err) => return Ret {arg, result: Err(anyhow!(err))},
-            Ok(text) => text,
-        };
-        match extract_hosts(&text) {
-            Err(err) => return Ret {arg, result: Err(err)},
-            Ok(hosts) => Ret {arg, result: Ok(hosts)},
-        }
-    }
-
-    use std::collections::HashSet;
-    use regex::Regex;
-    fn extract_hosts(body: &str, ) -> Result<HashSet<String>> {
-        lazy_static::lazy_static! {
-            static ref RE: Regex = Regex::new(r#"(?x)
-                \b(
-
-                    (?P<ip>
-                        (?: 
-                            (?: 25[0-5] | 2[0-4][0-9] | [01]?[0-9][0-9]? ) \. 
-                        ){3}
-
-                        (?: 25[0-5] | 2[0-4][0-9] | [01]?[0-9][0-9]? )
-                    )
-
-                    (?:
-                        : 
-                    |
-                        </td> \s* <td>
-                    )
-
-                    (?P<port>
-                        6553[0-5] | 
-                        655[0-2][0-9] | 
-                        65[0-4][0-9]{2} | 
-                        6[0-4][0-9]{3} | 
-                        [1-5][0-9]{4} | 
-                        [1-9][0-9]{1,3} 
-                    )
-                )\b
-            "#).unwrap();
-            static ref RE_HOST: Regex = Regex::new(r#"(?x)
-                "host":\s*"
-                    (?P<ip>
-                        (?: 
-                            (?: 25[0-5] | 2[0-4][0-9] | [01]?[0-9][0-9]? ) \. 
-                        ){3}
-
-                        (?: 25[0-5] | 2[0-4][0-9] | [01]?[0-9][0-9]? )
-                    )
-                "
-            "#).unwrap();
-            static ref RE_PORT: Regex = Regex::new(r#"(?x)
-                "port":\s*
-                (?P<port>
-                    6553[0-5] | 
-                    655[0-2][0-9] | 
-                    65[0-4][0-9]{2} | 
-                    6[0-4][0-9]{3} | 
-                    [1-5][0-9]{4} | 
-                    [1-9][0-9]{1,3} 
-                )
-            "#).unwrap();
-        }
-        let mut hosts: HashSet<String> = HashSet::new();
-        let mut found = false;
-        for caps in RE.captures_iter(&body) {
-            let host = format!("{}:{}", caps.name("ip").unwrap().as_str(), caps.name("port").unwrap().as_str());
-            hosts.insert(host);
-            found = true;
-        }
-        if !found {
-            for line in body.lines() {
-                trace!("line: {}", line);
-                if let Some(cap_host) = RE_HOST.captures(&line) {
-                    trace!("cap_host: {:?}", cap_host);
-                    if let Some(cap_port) = RE_PORT.captures(&line) {
-                        let host = format!("{}:{}", cap_host.name("ip").unwrap().as_str(), cap_port.name("port").unwrap().as_str());
-                        hosts.insert(host);
-                    }
-                }
-            }
-        }
-        Ok(hosts)
-    }
-}
-
-mod reuse_proxy {
-    #[allow(unused_imports)]
-    use log::{error, warn, info, debug, trace};
-    #[allow(unused_imports)]
-    use anyhow::{anyhow, bail, Result, Error, Context};
-    use super::super::*;
-
-    pub struct Arg {
-        pub url: String,
-        pub success_count: usize,
-        pub latency: Option<u128>,
-    }
-
-    pub type Ret = Arg;
-
-    use std::time::Duration;
-    pub async fn run(arg: Arg) -> Ret {
-        tokio::time::delay_for(Duration::from_millis(PROXY_REST_DURATION.load(Ordering::Relaxed) as u64)).await;
-        arg
-    }
-}
-
-mod fetch_req {
-    #[allow(unused_imports)]
-    use log::{error, warn, info, debug, trace};
-    #[allow(unused_imports)]
-    use anyhow::{anyhow, bail, Result, Error, Context};
-    use amq_protocol_types::LongLongUInt;
-
-    use super::{Req};
-
-    pub struct Arg {
-        pub client: reqwest::Client,
-        pub opt: Opt,
-    }
-
-    pub struct Ret {
-        pub result: std::result::Result<RetOk, reqwest::Error>,
-        pub opt: Opt,
-    }
-
-    pub struct RetOk {
-        pub url: reqwest::Url,
-        pub status: http::StatusCode,
-        pub text: String,
-        pub latency: u128,
-    }
-
-    pub struct Opt {
-        pub req: Req,
-        pub delivery_tag_req: LongLongUInt,
-        pub url: String,
-        pub success_count: usize,
-    }
-
-    pub async fn run(arg: Arg) -> Ret {
-        let start = std::time::Instant::now();
-        let Arg {  client, opt } = arg;
-        match client.request(opt.req.method.clone(), opt.req.url.clone()).send().await {
-            Err(err) => Ret { 
-                result: Err(err),
-                opt,
-            },
-            Ok(response) => {
-                let url = response.url().clone();
-                let status = response.status();
-                match response.text().await {
-                    Err(err) => Ret { 
-                        result: Err(err),
-                        opt,
-                    },
-                    Ok(text) => Ret {
-                        result: Ok(RetOk{
-                            url,
-                            status,
-                            text,
-                            latency: std::time::Instant::now().duration_since(start).as_millis(),
-                        }),
-                        opt,
-                    }
-                }
-            }
-        }
-    }
-}
-
 
 // ============================================================================
 // ============================================================================

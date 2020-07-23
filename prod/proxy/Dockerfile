@@ -13,7 +13,10 @@ RUN apt-get update && apt-get -y install ca-certificates libssl-dev && rm -rf /v
 
 RUN mkdir /proj
 WORKDIR /proj
+
 COPY ./copy/proxy .
+COPY ./sh/docker-entrypoint.sh .
+
 ENV PATH="/proj/:${PATH}"
 #
 # RUN apk add openssl-dev
@@ -22,5 +25,6 @@ ENV PATH="/proj/:${PATH}"
 # # RUN apk add dumb-init 
 # # RUN apk add bash
 #
-ENTRYPOINT [ "dumb-init", "--",  "proxy" ]
+ENTRYPOINT [ "dumb-init", "--",  "docker-entrypoint.sh" ]
+# ENTRYPOINT [ "dumb-init", "--",  "proxy /cnf/prod.toml" ]
 # ENTRYPOINT [ "dumb-init", "--",  "bash" ]

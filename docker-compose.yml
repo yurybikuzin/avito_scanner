@@ -14,6 +14,8 @@ services:
             - BW_PROJ_NAME
             - AVITO_AUTH=$BW_AVITO_AUTH
             - AVITO_PARAMS=$BW_AVITO_PARAMS
+            - AVITO_COUNT_LIMIT=$BW_AVITO_COUNT_LIMIT
+            - AVITO_PRICE_PRECISION=$BW_AVITO_PRICE_PRECISION
             - RUST_LOG=info
             - BW_RABBITMQ_USER=$BW_DEV_RABBITMQ_USER
             - BW_RABBITMQ_PASS=$BW_DEV_RABBITMQ_PASS
@@ -23,6 +25,7 @@ services:
         volumes:
             - ./dev/proj/sh:/sh
             - ./src:/src
+            - ./cnf:/cnf
             # - ./src:/home/rust/src
             - ./out:/out
             - ./dev/proj/cargo-git:/usr/local/cargo/git

@@ -10,6 +10,7 @@ services:
             - TZ=Europe/Moscow
             - RUST_LOG=warn
             - AVITO_COUNT_LIMIT=$BW_AVITO_COUNT_LIMIT
+            - AVITO_PRICE_PRECISION=$BW_AVITO_PRICE_PRECISION
             - AVITO_AUTH=$BW_AVITO_AUTH
             - AVITO_PARAMS=$BW_AVITO_PARAMS
             - BW_RABBITMQ_USER=$BW_PROD_RABBITMQ_USER

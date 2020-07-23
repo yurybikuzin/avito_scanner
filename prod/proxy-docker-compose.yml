@@ -19,7 +19,8 @@ services:
         tty: true
         environment:
             - TZ=Europe/Moscow
-            - RUST_LOG=proxy=trace,queue=trace
+            - RUST_LOG=info
+            - BW_CONFIG=$BW_PROD_CONFIG
             - BW_RABBITMQ_USER=$BW_PROD_RABBITMQ_USER
             - BW_RABBITMQ_PASS=$BW_PROD_RABBITMQ_PASS
             - BW_RABBITMQ_HOST=rmq
@@ -29,6 +30,8 @@ services:
             - $BW_PROD_PROXY_PORT:8000
         depends_on:
             - rmq
+        volumes:
+            - $BW_HOST_CNF_DIR:/cnf
 
     rmq:
         container_name: prod-${BW_PROJ_NAME}-rmq
