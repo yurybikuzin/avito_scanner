@@ -7,25 +7,26 @@ use anyhow::{Result, Error, bail, anyhow};
 // use std::env;
 use config::{ConfigError, Config, File, Environment};
 use serde::{Serialize, Deserialize};
-use std::sync::RwLock;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Settings {
-    pub sources: Vec<String>,
-    pub proxy_timeout_secs: u64,
-    pub own_ip_fresh_duration_secs: u64,
-    pub same_time_proxy_check_max_count: usize,
-    pub same_time_request_max_count: usize,
-    pub response_timeout_secs: u64,
-    pub proxy_rest_duration_millis: u64,
-    pub success_start_count: usize,
-    pub success_max_count: usize,
-    pub echo_service_url: String,
+    user: String,
+    pass: String,
+    host: String,
+    port: u16,
+    vhost: String,
 }
 
-lazy_static::lazy_static!{
-    pub static ref SINGLETON: RwLock<Option<Settings>> = RwLock::new(None);
+impl Settings {
+    pub fn addr(&self) -> String {
+        format!("amqp://{}:{}@{}:{}/{}", self.user, self.pass, self.host, self.port, self.vhost)
+    }
 }
+
+// use std::sync::RwLock;
+// lazy_static::lazy_static!{
+//     pub static ref SINGLETON: RwLock<Option<Settings>> = RwLock::new(None);
+// }
 
 use std::path::Path;
 impl Settings {
@@ -47,7 +48,7 @@ impl Settings {
 
         // Add in settings from the environment (with a prefix of APP)
         // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
-        s.merge(Environment::with_prefix("ps"))?;
+        s.merge(Environment::with_prefix("rmq"))?;
 
         // You may also programmatically change settings
         // s.set("database.url", "postgres://")?;

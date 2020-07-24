@@ -10,4 +10,4 @@
 # Нажмите CTRL+C
 # USAGE
 
-./proxy $BW_CONFIG
+./proxy $BW_CONFIG --rmq $BW_CONFIG_RMQ

@@ -10,7 +10,7 @@ members = [
     "ids", 
     "id_store", 
     "cards", 
-    # "autocatalog",
+    "autocatalog",
     "scan", 
     "collect",
     "to_csv",

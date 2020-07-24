@@ -12,8 +12,13 @@ use structopt::StructOpt;
 use std::path::PathBuf;
 #[derive(Debug, StructOpt)]
 struct Opt {
+    /// Path to toml config file
     #[structopt(parse(from_os_str))]
     config: PathBuf,
+
+    /// Path to toml config file for rabbitmq connection
+    #[structopt(long, parse(from_os_str))]
+    rmq: PathBuf,
 }
 mod settings;
 use settings::{Settings, SINGLETON};
@@ -40,7 +45,10 @@ async fn main() -> Result<()> {
         (*singleton).replace(settings);
     }
 
-    let pool = rmq::get_pool()?;
+    let settings_rmq = rmq::Settings::new(&opt.rmq).map_err(|err| anyhow!("{:?}: {}", opt.rmq, err))?;
+    println!("rmq: {:?}, settings: {}", opt.rmq, settings_rmq.as_string_pretty()?);
+
+    let pool = rmq::get_pool(settings_rmq)?;
 
     let routes = api::api();
 

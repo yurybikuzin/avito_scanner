@@ -21,13 +21,14 @@ services:
             - TZ=Europe/Moscow
             - RUST_LOG=info
             - BW_CONFIG=$BW_PROD_CONFIG
-            - BW_RABBITMQ_USER=$BW_PROD_RABBITMQ_USER
-            - BW_RABBITMQ_PASS=$BW_PROD_RABBITMQ_PASS
-            - BW_RABBITMQ_HOST=rmq
-            - BW_RABBITMQ_PORT=5672
-            - BW_RABBITMQ_VHOST=$BW_PROD_RABBITMQ_VHOST
-        ports:
-            - $BW_PROD_PROXY_PORT:8000
+            - BW_CONFIG_RMQ=$BW_PROD_CONFIG_RMQ
+            # - BW_RABBITMQ_USER=$BW_PROD_RABBITMQ_USER
+            # - BW_RABBITMQ_PASS=$BW_PROD_RABBITMQ_PASS
+            # - BW_RABBITMQ_HOST=rmq
+            # - BW_RABBITMQ_PORT=5672
+            # - BW_RABBITMQ_VHOST=$BW_PROD_RABBITMQ_VHOST
+        # ports:
+        #     - $BW_PROD_PROXY_PORT:8000
         depends_on:
             - rmq
         volumes:

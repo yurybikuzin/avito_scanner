@@ -27,16 +27,18 @@ pub type Pool = deadpool::managed::Pool<lapin::Connection, lapin::Error>;
 pub type Connection = deadpool::managed::Object<lapin::Connection, lapin::Error>;
 pub type RMQResult<T> = std::result::Result<T, PoolError>;
 
-pub fn get_pool() -> Result<Pool> {
-    let user = std::env::var("BW_RABBITMQ_USER").context("BW_RABBITMQ_USER")?;
-    let pass = std::env::var("BW_RABBITMQ_PASS").context("BW_RABBITMQ_PASS")?;
-    let host = std::env::var("BW_RABBITMQ_HOST").context("BW_RABBITMQ_HOST")?;
-    let port = std::env::var("BW_RABBITMQ_PORT").context("BW_RABBITMQ_PORT")?;
-    let vhost = std::env::var("BW_RABBITMQ_VHOST").context("BW_RABBITMQ_VHOST")?;
+mod settings;
+pub use settings::{Settings};
+pub fn get_pool(settings: Settings) -> Result<Pool> {
+    // let user = std::env::var("BW_RABBITMQ_USER").context("BW_RABBITMQ_USER")?;
+    // let pass = std::env::var("BW_RABBITMQ_PASS").context("BW_RABBITMQ_PASS")?;
+    // let host = std::env::var("BW_RABBITMQ_HOST").context("BW_RABBITMQ_HOST")?;
+    // let port = std::env::var("BW_RABBITMQ_PORT").context("BW_RABBITMQ_PORT")?;
+    // let vhost = std::env::var("BW_RABBITMQ_VHOST").context("BW_RABBITMQ_VHOST")?;
     // let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| "amqp://rmq:rmq@rmq:5672/%2f".into());
-    let addr = format!("amqp://{}:{}@{}:{}/{}", user, pass, host, port, vhost);
-    info!("addr: {}", addr);
-    let manager = Manager::new(addr, ConnectionProperties::default().with_tokio());
+    // let addr = format!("amqp://{}:{}@{}:{}/{}", user, pass, host, port, vhost);
+    // info!("addr: {}", addr);
+    let manager = Manager::new(settings.addr(), ConnectionProperties::default().with_tokio());
     Ok(deadpool::managed::Pool::new(manager, 10))
 }
 

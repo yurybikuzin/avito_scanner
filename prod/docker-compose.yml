@@ -19,5 +19,6 @@ services:
             - BW_RABBITMQ_PORT=$BW_PROD_RABBITMQ_PORT
             - BW_RABBITMQ_VHOST=$BW_PROD_RABBITMQ_VHOST
         volumes:
-            - ./out:/out
+            - $BW_HOST_CNF_DIR:/cnf
+            - $BW_HOST_OUT_DIR:/out
 

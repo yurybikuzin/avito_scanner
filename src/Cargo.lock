@@ -148,6 +148,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "autocatalog"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrange_millis",
+ "auth",
+ "client",
+ "collect",
+ "futures",
+ "http",
+ "ids",
+ "itertools",
+ "json",
+ "lazy_static",
+ "log 0.4.8",
+ "pretty_env_logger",
+ "regex",
+ "reqwest",
+ "rmq",
+ "serde 1.0.114",
+ "serde_json",
+ "term",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "autocfg"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1039,6 +1066,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "itertools"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
+dependencies = [
+ "either",
 ]
 
 [[package]]
@@ -2094,10 +2130,13 @@ version = "0.1.0"
 dependencies = [
  "amq-protocol-types",
  "anyhow",
+ "config",
  "deadpool",
  "deadpool-lapin",
  "lapin",
  "log 0.4.8",
+ "serde 1.0.114",
+ "serde_json",
  "tokio-amqp",
 ]
 

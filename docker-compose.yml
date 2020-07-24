@@ -12,56 +12,26 @@ services:
             - TZ=Europe/Moscow
 
             - BW_PROJ_NAME
-            - AVITO_AUTH=$BW_AVITO_AUTH
-            - AVITO_PARAMS=$BW_AVITO_PARAMS
-            - AVITO_COUNT_LIMIT=$BW_AVITO_COUNT_LIMIT
-            - AVITO_PRICE_PRECISION=$BW_AVITO_PRICE_PRECISION
+            # - AVITO_AUTH=$BW_AVITO_AUTH
+            # - AVITO_PARAMS=$BW_AVITO_PARAMS
+            # - AVITO_COUNT_LIMIT=$BW_AVITO_COUNT_LIMIT
+            # - AVITO_PRICE_PRECISION=$BW_AVITO_PRICE_PRECISION
             - RUST_LOG=info
-            - BW_RABBITMQ_USER=$BW_DEV_RABBITMQ_USER
-            - BW_RABBITMQ_PASS=$BW_DEV_RABBITMQ_PASS
-            - BW_RABBITMQ_HOST=rmq
-            - BW_RABBITMQ_PORT=5672
-            - BW_RABBITMQ_VHOST=$BW_DEV_RABBITMQ_VHOST
+            # - BW_RABBITMQ_USER=$BW_DEV_RABBITMQ_USER
+            # - BW_RABBITMQ_PASS=$BW_DEV_RABBITMQ_PASS
+            # - BW_RABBITMQ_HOST=rmq
+            # - BW_RABBITMQ_PORT=5672
+            # - BW_RABBITMQ_VHOST=$BW_DEV_RABBITMQ_VHOST
         volumes:
             - ./dev/proj/sh:/sh
             - ./src:/src
             - ./cnf:/cnf
-            # - ./src:/home/rust/src
             - ./out:/out
             - ./dev/proj/cargo-git:/usr/local/cargo/git
-            # - ./dev/proj/cargo-git:/home/rust/.cargo/git
             - ./dev/proj/cargo-registry:/usr/local/cargo/registry
-            # - ./dev/proj/cargo-registry:/home/rust/.cargo/registry
-            # - ./dev/proj/cargo-target:/home/rust/src/target
             - ./dev/proj/cargo-target:/src/target
-        depends_on:
-            - rmq
-
-    # proxy:
-    #     container_name: ${BW_PROJ_NAME}-proxy
-    #     image: bazawinner/dev-${BW_PROJ_NAME}-proj:${BW_DEV_PROJ_VERSION}
-    #     entrypoint: ["docker-entrypoint.sh"]
-    #     tty: true
-    #     environment:
-    #         - TZ=Europe/Moscow
-    #
-    #         - BW_PROJ_NAME
-    #         - BW_RABBITMQ_USER=$BW_DEV_RABBITMQ_USER
-    #         - BW_RABBITMQ_PASS=$BW_DEV_RABBITMQ_PASS
-    #         - BW_RABBITMQ_HOST=rmq
-    #         - BW_RABBITMQ_PORT=5672
-    #         - BW_RABBITMQ_VHOST=$BW_DEV_RABBITMQ_VHOST
-    #     volumes:
-    #         - ./dev/proxy/sh:/sh
-    #         - ./src:/home/rust/src
-    #         # - ./src/proxy/:/home/rust/src
-    #         - ./dev/proj/cargo-git:/home/rust/.cargo/git
-    #         - ./dev/proj/cargo-registry:/home/rust/.cargo/registry
-    #         - ./dev/proj/cargo-target:/home/rust/src/target
-    #     ports:
-    #         - $BW_DEV_PROXY_PORT:8000
-    #     depends_on:
-    #         - rmq
+        # depends_on:
+        #     - rmq
 
     rmq:
         container_name: ${BW_PROJ_NAME}-rmq
@@ -70,7 +40,7 @@ services:
             RABBITMQ_DEFAULT_USER: $BW_DEV_RABBITMQ_USER
             RABBITMQ_DEFAULT_PASS: $BW_DEV_RABBITMQ_PASS
         ports:
-            - $BW_DEV_RABBITMQ_PORT:5672
+            # - $BW_DEV_RABBITMQ_PORT:5672
             - $BW_DEV_RABBITMQ_PORT_MANAGEMENT:15672
 
     # auth:

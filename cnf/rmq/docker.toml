@@ -1,0 +1,5 @@
+port = 5672
+host = "rmq"
+vhost = "%2f"
+user = "rmq"
+pass = "bjf9KbPB"

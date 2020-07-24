@@ -16,19 +16,7 @@ use rmq::{
     basic_ack,
 };
 
-pub async fn process(pool: Pool) -> Result<()> {
-    let mut retry_interval = tokio::time::interval(Duration::from_secs(5));
-    loop {
-        retry_interval.tick().await;
-        let queue_name = "request";
-        let consumer_tag = "request_consumer";
-        println!("connecting {} ...", consumer_tag);
-        match listen(pool.clone(), consumer_tag, queue_name).await {
-            Ok(_) => println!("{} listen returned", consumer_tag),
-            Err(e) => eprintln!("{} listen had an error: {}", consumer_tag, e),
-        };
-    }
-}
+use super::*;
 
 use req::Req;
 use res::Res;
@@ -42,203 +30,8 @@ use futures::{
     },
 };
 
-use serde::Serialize;
-#[derive(Serialize)]
-struct ProxyError {
-    url: String,
-    msg: String,
-}
-
-// use super::*;
-use std::collections::HashSet;
-
-mod fetch_source;
-
-mod reuse_proxy; 
-
-mod fetch_req;
-
-
-macro_rules! get_receiver {
-    ($receiver: ident, $consumer: expr, $kind: expr, $thread_pool: expr) => {
-        let (mut sender, mut $receiver): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel(1000);
-        $thread_pool.spawn_ok(async move {
-            while let Some(consumer_next) = $consumer.next().await {
-                if let Ok((_channel, delivery)) = consumer_next {
-                    let s = std::str::from_utf8(&delivery.data).unwrap();
-                    sender.try_send((s.to_owned(), delivery.delivery_tag)).unwrap();
-                } else {
-                    error!("{}: Err(err) = consumer_next", $kind);
-                }
-            }
-            error!("{}: consumer stopped", $kind);
-        });
-    };
-}
-
-macro_rules! fut_fetch {
-    ($fut_queue: expr, $fetch_req_count: ident, $req: expr, $url: expr, $proxy: expr, $success_count: expr, $delivery_tag_req: expr) => {
-        let client = reqwest::Client::builder()
-            .proxy($proxy)
-            .timeout(
-                $req.timeout.unwrap_or(
-                    Duration::from_secs(RESPONSE_TIMEOUT.load(Ordering::Relaxed) as u64)
-                )
-            )
-            .build()?
-        ;
-        // trace!("took {} for {}", $url, $req.url);
-        $fetch_req_count += 1;
-        info!("Отправляем запрос '{}' на обработку через прокси '{}', в обработке теперь: {}", $delivery_tag_req, $url, $fetch_req_count);
-        $fut_queue.push(op::run(op::Arg::FetchReq(fetch_req::Arg {
-            client, 
-            opt: fetch_req::Opt {
-                req: $req,
-                delivery_tag_req: $delivery_tag_req,
-                url: $url.to_owned(),
-                success_count: $success_count,
-            },
-        })));
-    };
-}
-
-macro_rules! start_proxy_check {
-    ($fut_queue: expr, $source_fetch_count: ident, $proxy_url_queue_to_check: expr, $proxy_url_check_count: expr, $sources: expr, $source_queue_to_fetch: expr) => {
-        if $source_queue_to_fetch.len() == 0 && $source_fetch_count == 0 && $proxy_url_queue_to_check.len() == 0 && $proxy_url_check_count == 0 {
-            // начинаем со чтения списка url'ов источников
-            for source in $sources.iter() {
-                $source_queue_to_fetch.push_back(source);
-            }
-            info!("Заполнили очередь источников прокси: {}", $source_queue_to_fetch.len());
-            // пока есть вакантные места на fetch источников, заполняем их
-            while $source_fetch_count < SAME_TIME_REQUEST_MAX.load(Ordering::Relaxed) { 
-                if let Some(source) = $source_queue_to_fetch.pop_front() {
-                    let client = reqwest::Client::builder()
-                        .timeout(Duration::from_secs(PROXY_TIMEOUT.load(Ordering::Relaxed) as u64))
-                        .build()?
-                    ;
-                    $fut_queue.push(op::run(op::Arg::FetchSource(fetch_source::Arg{client, source: source.to_owned()})));
-
-                    $source_fetch_count += 1;
-                } else {
-                    break;
-                }
-            }
-            info!("Запустили одновременное чтение источников прокси: {}", $source_fetch_count);
-        } else if $source_queue_to_fetch.len() != 0 {
-            info!("Сейчас очередь источников прокси: {}", $source_queue_to_fetch.len());
-        } else if $source_fetch_count != 0 {
-            info!("Сейчас fetch'ится источников прокси: {}", $source_fetch_count);
-        } else if $proxy_url_queue_to_check.len() != 0 {
-            info!("Сейчас очередь прокси на проверку: {}", $proxy_url_queue_to_check.len());
-        } else {
-            info!("Сейчас проверяется прокси: {}", $proxy_url_check_count);
-        }
-    };
-}
-
-
-macro_rules! fut_fetch_if_free_proxy_exists {
-    ($fut_queue: expr, $fetch_req_count: ident, $reuse_proxy_count: expr, $proxy_url_queue: expr, $req: expr, $delivery_tag_req: expr, $source_fetch_count: ident, $proxy_url_queue_to_check: expr, $proxy_url_check_count: expr, $sources: expr, $source_queue_to_fetch: expr, $else: block) => {
-                // если есть свободный прокси, выполняем запрос через этот прокси
-        if let Some(ProxyUrlQueueItem {url, success_count, latency: _}) = $proxy_url_queue.pop_front() {
-            info!("Есть свободный прокси, осталось еще: {}, еще {} используются и {} в режиме отложенной просьбы на возврат в очередь свободных прокси", $proxy_url_queue.len(), $fetch_req_count, $reuse_proxy_count);
-            fut_fetch!($fut_queue, $fetch_req_count, $req, url, reqwest::Proxy::all(&url).unwrap(), success_count, $delivery_tag_req);
-        } else {
-            warn!("Свободных прокси нет, но на проверке еще прокси: {}, и еще ждут своей очереди: {}", $proxy_url_check_count, $proxy_url_queue_to_check.len());
-            $else
-            // поскольку список свободных прокси пуст, запускаем процесс дополнения
-            // списк свободных прокси, но предварительно убедившись, что он уже не запущен
-            start_proxy_check!($fut_queue, $source_fetch_count, $proxy_url_queue_to_check, $proxy_url_check_count, $sources, $source_queue_to_fetch);
-        }
-    };
-}
-
-macro_rules! fut_fetch_if_free_proxy_exists_or_push_front {
-    ($fut_queue: expr, $fetch_req_count: ident, $reuse_proxy_count: expr, $proxy_url_queue: expr, $req: expr, $delivery_tag_req: expr, $source_fetch_count: ident, $proxy_url_queue_to_check: expr, $proxy_url_check_count: expr, $sources: expr, $source_queue_to_fetch: expr, $req_queue: expr) => {
-        // если есть свободный прокси, выполняем запрос через этот прокси
-        fut_fetch_if_free_proxy_exists!($fut_queue, $fetch_req_count, $reuse_proxy_count, $proxy_url_queue, $req, $delivery_tag_req, $source_fetch_count, $proxy_url_queue_to_check, $proxy_url_check_count, $sources, $source_queue_to_fetch, {
-        // в противном случае помещаем его в начало очереди запросов на обработку
-            $req_queue.push_front(ReqQueueItem {req: $req, delivery_tag: $delivery_tag_req});
-            info!("поместили запрос '{}' в начало очереди запросов на обработку, теперь в очереди: {}", $delivery_tag_req, $req_queue.len());
-        });
-    };
-}
-
-macro_rules! fut_fetch_if_non_processed_request_exists {
-    ($fut_queue: expr, $fetch_req_count: ident, $req_queue: expr, $url: expr, $proxy: block, $success_count: expr, $else: block) => {
-        // если есть необработанный запрос, выполняем этот запрос через прокси
-        if let Some(ReqQueueItem {req, delivery_tag: delivery_tag_req}) = $req_queue.pop_front() {
-            info!("Есть необработанный запрос '{}', осталось еще: {}, и еще {} в обработке", delivery_tag_req, $req_queue.len(), $fetch_req_count);
-            let proxy = $proxy;
-            fut_fetch!($fut_queue, $fetch_req_count, req, $url, proxy, $success_count, delivery_tag_req);
-        } else {
-            warn!("Необработанных запросов нет{}",
-                if $fetch_req_count == 0 {
-                    "".to_owned()
-                } else {
-                    format!(", но в обработке еще запросов: {}", $fetch_req_count)
-                }
-            );
-            $else
-        }
-    };
-}
-
-macro_rules! fut_push_check_proxy {
-    ($fut_queue: expr, $url: expr, $own_ip_opt: ident) => {
-        let own_ip = match $own_ip_opt.take() {
-            None => match get_own_ip().await {
-                Ok(own_ip) => own_ip,
-                Err(err) => {
-                    bail!("FATAL: failed to get own_ip: {}", err);
-                },
-            },
-            Some(own_ip) => {
-                if Instant::now().duration_since(own_ip.last_update).as_secs() < OWN_IP_FRESH_DURATION.load(Ordering::Relaxed) as u64 {
-                    own_ip
-                } else {
-                    match get_own_ip().await {
-                        Ok(own_ip) => own_ip,
-                        Err(err) => {
-                            warn!("old own_ip {} will be used due to {}", own_ip.ip, err);
-                            own_ip
-                        },
-                    }
-                }
-            },
-        };
-        let proxy = match reqwest::Proxy::all(&$url) {
-            Ok(proxy) => proxy,
-            Err(err) => {
-                bail!("malformed url {}: {}", $url, err);
-            },
-        };
-        let client = reqwest::Client::builder()
-            .proxy(proxy)
-            .timeout(Duration::from_secs(PROXY_TIMEOUT.load(Ordering::Relaxed) as u64))
-            .build()?
-        ;
-        let opt = check_proxy::Opt { url: $url };
-        $fut_queue.push(op::run(op::Arg::CheckProxy(check_proxy::Arg { 
-            client, 
-            own_ip: own_ip.ip.to_owned(), 
-            opt,
-        })));
-        $own_ip_opt = Some(own_ip);
-    };
-}
-
-macro_rules! fut_reuse_proxy {
-    ($fut_queue: expr, $reuse_proxy_count: ident, $url: expr, $latency: expr, $success_count: expr) => {
-        $fut_queue.push(op::run(op::Arg::ReuseProxy(reuse_proxy::Arg {
-            url: $url,
-            success_count: $success_count,
-            latency: $latency,
-        })));
-        $reuse_proxy_count += 1;
-    };
-}
+use std::collections::{HashSet, HashMap};
+use super::settings;
 
 struct ReqQueueItem {
     req: Req,
@@ -251,45 +44,7 @@ struct ProxyUrlQueueItem {
     latency: Option<u128>,
 }
 
-fn add_item_to_proxy_url_queue(item: ProxyUrlQueueItem, mut queue: VecDeque<ProxyUrlQueueItem>) -> VecDeque<ProxyUrlQueueItem> {
-    match item.latency {
-        None => {
-            trace!("Помещаем в конец очереди url '{}', потому что его latency None", item.url);
-            queue.push_back(item);
-        },
-        Some(latency) => {
-            let mut i_found: Option<usize> = None;
-            for (i, item) in queue.iter().enumerate() {
-                match item.latency {
-                    None => { 
-                        i_found = Some(i);
-                        break;
-                    },
-                    Some(latency_item) => {
-                        if latency_item > latency {
-                            i_found = Some(i);
-                            break;
-                        }
-                    },
-                }
-            }
-            match i_found {
-                None => {
-                    trace!("Помещаем в конец очереди url '{}', потому что его latency {} больше остальных {}", item.url, latency, queue.len());
-                    queue.push_back(item);
-                },
-                Some(i) => {
-                    trace!("Помещаем url '{}' с latency {} перед {}-м элементом из {}", item.url, latency, i, queue.len());
-                    queue.insert(i, item);
-                },
-            }
-        },
-    }
-    queue
-}
-
-use std::collections::HashMap;
-async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queue_name: S2) -> Result<()> {
+pub async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queue_name: S2) -> Result<()> {
     let conn = get_conn(pool).await.map_err(|e| {
         error!("could not get rmq conn: {}", e);
         e
@@ -310,21 +65,25 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     let receiver_request_fut = receiver_request.next();
     pin_mut!(receiver_request_fut);
 
-    let sources: Vec<&str> = vec![
-        "https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list", // 394 => 179
-        "https://raw.githubusercontent.com/a2u/free-proxy-list/master/free-proxy-list.txt", // 4 => 1
-        "http://rootjazz.com/proxies/proxies.txt", // 925 => 88
-        "https://socks-proxy.net/", // 300 => 3
-        "http://online-proxy.ru/", // 1769 => 19,
-    ];
     let protos = vec!["socks5", "http", "https"];
     let mut proxy_url_queue_to_check = VecDeque::<String>::new();
     let mut proxy_url_check_count = 0usize;
-    // let proxy_url_check_count_same_time_max = 50usize;
-    let mut source_queue_to_fetch = VecDeque::<&str>::new();
+    let mut source_queue_to_fetch = VecDeque::<String>::new();
     let mut source_fetch_count = 0usize;
-    // let source_fetch_count_same_time_max = 10usize;
-    let mut own_ip_opt: Option<OwnIp> = None;
+    let own_ip_client = {
+        let_settings!(settings);
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(settings.proxy_timeout_secs))
+            .build()?
+    };
+    let mut own_ip: String = {
+        let_settings!(settings);
+        get_ip( own_ip_client.clone(), settings.echo_service_url.as_ref()).await?
+    };
+    info!("own_ip: {}", own_ip);
+    {
+        fut_update_own_ip!(fut_queue, own_ip, own_ip_client);
+    }
     pub struct Checked {
         pub status: check_proxy::Status,
         pub url: String,
@@ -333,7 +92,7 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     let mut fetch_req_count = 0usize;
     let mut reuse_proxy_count = 0usize;
 
-    start_proxy_check!(fut_queue, source_fetch_count, proxy_url_queue_to_check, proxy_url_check_count, sources, source_queue_to_fetch);
+    start_proxy_check!(fut_queue, source_fetch_count, proxy_url_queue_to_check, proxy_url_check_count, source_queue_to_fetch);
     loop {
         select! {
             // пришел запрос на обработку
@@ -351,6 +110,10 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
             },
             ret = fut_queue.select_next_some() => {
                 match ret {
+                    op::Ret::UpdateOwnIp(own_ip_updated) => {
+                        own_ip = own_ip_updated;
+                        fut_update_own_ip!(fut_queue, own_ip, own_ip_client);
+                    },
                     op::Ret::FetchSource(ret) => {
                         info!("Пришел результат fetch'а источника прокси '{}'", ret.arg.source);
                         match ret.result {
@@ -381,11 +144,13 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                     }
                                 }
                                 info!("Очередь прокси на проверкy: {}, используемых хостов: {}", proxy_url_queue_to_check.len(), proxy_host_set.len());
-                                while proxy_url_check_count < SAME_TIME_PROXY_CHECK_MAX.load(Ordering::Relaxed) {
+                                let_settings!(settings);
+                                // let settings = settings::SINGLETON.read().unwrap().as_ref().unwrap();
+                                while proxy_url_check_count < settings.same_time_proxy_check_max_count {
                                     match proxy_url_queue_to_check.pop_front() {
                                         None => break,
                                         Some(url) => {
-                                            fut_push_check_proxy!(fut_queue, url, own_ip_opt);
+                                            fut_push_check_proxy!(fut_queue, url, own_ip);
                                             proxy_url_check_count += 1;
                                         } 
                                     }
@@ -469,7 +234,9 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                 Some(Elected {url, latency}) => {
                                 // Если же удалось получить новый живой прокси
                                     info!("Для хоста '{}' выбран прокси '{}' с latency {}, осталось еще прокси для проверки: {}", host, url, latency, proxy_url_queue_to_check.len() + proxy_url_check_count - 1);
-                                    let success_count = SUCCESS_COUNT_START.load(Ordering::Relaxed) as usize;
+                                    let_settings!(settings);
+                                    // let settings = settings::SINGLETON.read().unwrap().as_ref().unwrap();
+                                    let success_count = settings.success_start_count;
                                     // Проверяем очередь запросов, и если она не пуста, отправляем
                                     // запрос на выполнение с этим прокси
                                     fut_fetch_if_non_processed_request_exists!(fut_queue, fetch_req_count, req_queue, url, { reqwest::Proxy::all(&url).unwrap() }, success_count, {
@@ -499,34 +266,11 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                         }
                         if let Some(url) = proxy_url_queue_to_check.pop_front() {
                             trace!("Есть непроверенный прокси, осталось еще: {}", proxy_url_queue_to_check.len());
-                            fut_push_check_proxy!(fut_queue, url, own_ip_opt);
+                            fut_push_check_proxy!(fut_queue, url, own_ip);
                         } else {
                             proxy_url_check_count -= 1;
                         }
                         trace!("Сейчас одноврменно проверяется прокси: {}", proxy_url_check_count);
-                    },
-                    // отложенные просьбы вернуть освободившийся прокси в очередь достпуных прокси
-                    op::Ret::ReuseProxy(ret) => {
-                        reuse_proxy_count -= 1;
-                        let reuse_proxy::Ret { url, success_count, latency } = ret;
-                        info!("Пришла отложенная просьба вернуть в очередь прокси '{}' с latency {:?} и success_count {}, еще отложенных просьб: {}", url, latency, success_count, reuse_proxy_count);
-                        // Проверяем очередь запросов, и если она не пуста, отправляем
-                        // запрос на выполнение с этим прокси
-                        fut_fetch_if_non_processed_request_exists!(fut_queue, fetch_req_count, req_queue, url, { reqwest::Proxy::all(&url).unwrap() }, success_count, {
-                            // в противном случае помещаем в очередь доступных прокси (согласно latency)
-                            info!("Запросов, ожидающих обработки, нет{}, поэтому помещаем прокси '{}' в очередь свободных прокси (длина до помещения: {}) согласно его latency {:?}", 
-                                if fetch_req_count == 0 { 
-                                    "".to_owned() 
-                                } else { 
-                                    format!(" (но в обработке еще запросов: {})", fetch_req_count)
-                                }, 
-                                url, 
-                                proxy_url_queue.len(), 
-                                latency,
-                            );
-                            let item = ProxyUrlQueueItem {url, success_count, latency};
-                            proxy_url_queue = add_item_to_proxy_url_queue(item, proxy_url_queue);
-                        });
                     },
                     // результаты обрабтки пары (запрос, прокси)
                     op::Ret::FetchReq(ret) => {
@@ -596,15 +340,14 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                                         info!("удаляем запрос {} из очереди запросов", delivery_tag_req);
                                         basic_ack(&channel, delivery_tag_req).await?;
 
-                                        // let success_count = if success_count >= SUCCESS_COUNT_MAX.load(Ordering::Relaxed) as usize { success_count } else { success_count + 1 };
                                         info!("формируем отложенную просьбу на возврат прокси {} в очередь прокси с latency {} и увеличением кредита доверия до {}", url, latency, success_count);
-                                        fut_reuse_proxy!(fut_queue, reuse_proxy_count, url, Some(latency), 
-                                            if success_count >= SUCCESS_COUNT_MAX.load(Ordering::Relaxed) as usize { 
-                                                    success_count 
-                                                } else { 
-                                                    success_count + 1 
-                                            }
-                                        );
+                                        let_settings!(settings);
+                                        let success_count = if success_count >= settings.success_max_count { 
+                                                success_count 
+                                            } else { 
+                                                success_count + 1 
+                                        };
+                                        fut_reuse_proxy!(fut_queue, reuse_proxy_count, url, Some(latency), success_count);
                                     },
                                     http::StatusCode::FORBIDDEN  => {
                                         let host = get_host_of_url(&url)?;
@@ -637,6 +380,29 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
                             }
                         }
                     },
+                    // отложенные просьбы вернуть освободившийся прокси в очередь достпуных прокси
+                    op::Ret::ReuseProxy(ret) => {
+                        reuse_proxy_count -= 1;
+                        let reuse_proxy::Ret { url, success_count, latency } = ret;
+                        info!("Пришла отложенная просьба вернуть в очередь прокси '{}' с latency {:?} и success_count {}, еще отложенных просьб: {}", url, latency, success_count, reuse_proxy_count);
+                        // Проверяем очередь запросов, и если она не пуста, отправляем
+                        // запрос на выполнение с этим прокси
+                        fut_fetch_if_non_processed_request_exists!(fut_queue, fetch_req_count, req_queue, url, { reqwest::Proxy::all(&url).unwrap() }, success_count, {
+                            // в противном случае помещаем в очередь доступных прокси (согласно latency)
+                            info!("Запросов, ожидающих обработки, нет{}, поэтому помещаем прокси '{}' в очередь свободных прокси (длина до помещения: {}) согласно его latency {:?}", 
+                                if fetch_req_count == 0 { 
+                                    "".to_owned() 
+                                } else { 
+                                    format!(" (но в обработке еще запросов: {})", fetch_req_count)
+                                }, 
+                                url, 
+                                proxy_url_queue.len(), 
+                                latency,
+                            );
+                            let item = ProxyUrlQueueItem {url, success_count, latency};
+                            proxy_url_queue = add_item_to_proxy_url_queue(item, proxy_url_queue);
+                        });
+                    },
                 }
             },
             complete => {
@@ -648,128 +414,40 @@ async fn listen<S: AsRef<str>, S2: AsRef<str>>(pool: Pool, consumer_tag: S, queu
     Ok(())
 }
 
-mod check_proxy;
-
-use std::time::Instant;
-pub struct OwnIp {
-    ip: String,
-    last_update: Instant,
-}
-pub async fn get_own_ip() -> Result<OwnIp> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(PROXY_TIMEOUT.load(Ordering::Relaxed) as u64))
-        .build()?
-    ;
-    let ip = get_ip( client).await?;
-    Ok(OwnIp{
-        ip, 
-        last_update: Instant::now(),
-    })
-}
-
-use json::{Json, By};
-pub async fn get_ip(client: reqwest::Client) -> Result<String> {
-    let url = "https://bikuzin18.baza-winner.ru/echo";
-    let text = client.get(url)
-        .send()
-        .await?
-        .text()
-        .await?
-    ;
-    let json = Json::from_str(text, url)?;
-    let ip = json.get([By::key("headers"), By::key("x-real-ip")])?.as_string()?;
-    Ok(ip)
-}
-
-use lazy_static::lazy_static;
-use regex::Regex;
-
-fn get_host_of_url(url: &str) -> Result<String> {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r#"(?x)
-            ^
-            (?P<proto>.*?)
-            ://
-            (?P<host>.*)
-            $
-        "#).unwrap();
+fn add_item_to_proxy_url_queue(item: ProxyUrlQueueItem, mut queue: VecDeque<ProxyUrlQueueItem>) -> VecDeque<ProxyUrlQueueItem> {
+    match item.latency {
+        None => {
+            trace!("Помещаем в конец очереди url '{}', потому что его latency None", item.url);
+            queue.push_back(item);
+        },
+        Some(latency) => {
+            let mut i_found: Option<usize> = None;
+            for (i, item) in queue.iter().enumerate() {
+                match item.latency {
+                    None => { 
+                        i_found = Some(i);
+                        break;
+                    },
+                    Some(latency_item) => {
+                        if latency_item > latency {
+                            i_found = Some(i);
+                            break;
+                        }
+                    },
+                }
+            }
+            match i_found {
+                None => {
+                    trace!("Помещаем в конец очереди url '{}', потому что его latency {} больше остальных {}", item.url, latency, queue.len());
+                    queue.push_back(item);
+                },
+                Some(i) => {
+                    trace!("Помещаем url '{}' с latency {} перед {}-м элементом из {}", item.url, latency, i, queue.len());
+                    queue.insert(i, item);
+                },
+            }
+        },
     }
-    match RE.captures(url) {
-        Some(caps) => Ok(caps.name("host").unwrap().as_str().to_owned()),
-        None => Err(anyhow!("Failed to extract host from url: {}", url)),
-    }
-}
-
-mod op {
-    #[allow(unused_imports)]
-    use log::{error, warn, info, debug, trace};
-    #[allow(unused_imports)]
-    use anyhow::{anyhow, bail, Result, Error, Context};
-    use super::*;
-
-    pub enum Arg {
-        FetchSource(fetch_source::Arg),
-        FetchReq(fetch_req::Arg),
-        CheckProxy(check_proxy::Arg),
-        ReuseProxy(reuse_proxy::Arg),
-    }
-
-    pub enum Ret {
-        FetchSource(fetch_source::Ret),
-        FetchReq(fetch_req::Ret),
-        CheckProxy(check_proxy::Ret),
-        ReuseProxy(reuse_proxy::Ret),
-    }
-
-    pub async fn run(arg: Arg) -> Ret {
-        match arg {
-            Arg::FetchSource(arg) => {
-                let ret = fetch_source::run(arg).await;
-                Ret::FetchSource(ret)
-            },
-            Arg::FetchReq(arg) => {
-                let ret = fetch_req::run(arg).await;
-                Ret::FetchReq(ret)
-            },
-            Arg::CheckProxy(arg) => {
-                let ret = check_proxy::run(arg).await;
-                Ret::CheckProxy(ret)
-            },
-            Arg::ReuseProxy(arg) => {
-                let ret = reuse_proxy::run(arg).await;
-                Ret::ReuseProxy(ret)
-            },
-        }
-    }
-}
-
-// ============================================================================
-// ============================================================================
-// ============================================================================
-
-#[cfg(test)]
-mod tests {
-
-    #[allow(unused_imports)]
-    use log::{error, warn, info, debug, trace};
-    use super::*;
-
-    // docker exec -it -e RUST_LOG=diaps=trace -e AVITO_AUTH=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir avito-proj cargo test -p diaps -- --nocapture
-    #[tokio::test]
-    async fn test_get_host_of_proxy_url() -> Result<()> {
-        test_helper::init();
-
-        let url = "http://91.121.175.66:35391";
-        assert_eq!(get_host_of_url(url).unwrap(), "91.121.175.66:35391");
-
-        let url = "socks5://91.121.175.66:35391";
-        assert_eq!(get_host_of_url(url).unwrap(), "91.121.175.66:35391");
-
-        let url = "https://91.121.175.66:35391";
-        assert_eq!(get_host_of_url(url).unwrap(), "91.121.175.66:35391");
-
-        Ok(())
-    }
-
+    queue
 }
 
