@@ -18,7 +18,9 @@ pub struct Arg<'a> {
     pub out_dir: &'a Path,
 }
 
-pub struct Ret ();
+pub struct Ret {
+    pub id: u64,
+}
 
 pub async fn run<'a>(arg: Arg<'a>) -> Result<Ret> {
     let file_path = super::file_spec::get(arg.out_dir, arg.id);
@@ -30,6 +32,6 @@ pub async fn run<'a>(arg: Arg<'a>) -> Result<Ret> {
     let json = serde_json::to_string_pretty(&arg.fetched)?;
     file.write_all(json.as_bytes()).await?;
 
-    Ok(Ret())
+    Ok(Ret{id: arg.id})
 }
 

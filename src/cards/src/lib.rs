@@ -142,7 +142,9 @@ where
                     },
                     Ok(ret) => {
                         match ret {
-                            OpRet::Save(_) => {},
+                            OpRet::Save(save::Ret{id}) => {
+                                trace!("saved: {}", id);
+                            },
                             OpRet::Check(check::Ret{id}) => {
                                 if let Some(id) = id {
                                     if ids_non_existent.len() == 0 {
@@ -164,6 +166,7 @@ where
                                     if used_network_threads < arg.thread_limit_network {
                                         // let client = reqwest::Client::new();
                                         let client = arg.client_provider.build().await?;
+                                        trace!("pushed to fetch: {}", ids_non_existent[ids_non_existent_i]);
                                         push_fut_fetch!(fut_queue, client, auth, arg, ids_non_existent, ids_non_existent_i);
                                         used_network_threads += 1;
                                     }
@@ -175,6 +178,7 @@ where
                                 }
                             },
                             OpRet::Fetch(ret) => {
+                                trace!("fetched: {}", ret.id);
                                 callback = if let Some(mut callback) = callback {
                                     elapsed_qt += 1;
                                     if remained_qt > 0 {
@@ -297,15 +301,17 @@ mod tests {
             ids.insert(id);
         }
         let out_dir = &Path::new("out_test");
+        let settings_rmq = rmq::Settings::new(std::path::Path::new("../../cnf/rmq/bikuzin18.toml"))?;
+        let pool = rmq::get_pool(settings_rmq)?;
         let arg = Arg {
             ids: &ids,
             out_dir,
             thread_limit_network: 1,
             thread_limit_file: 12,
-            client_provider: client::Provider::new(client::Kind::ViaProxy(rmq::get_pool())),
+            client_provider: client::Provider::new(client::Kind::ViaProxy(pool, "cards".to_owned())),
             // retry_count: 3,
         };
-        let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
+        let mut auth = auth::Lazy::new(auth::Arg::new_ready("af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir".to_owned()));
 
         let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."))?;
         let start = Instant::now();

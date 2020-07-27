@@ -30,6 +30,7 @@ arrange_millis = { path = "../arrange_millis" }
 ids = { path = "../ids" }
 client = { path = "../client" }
 json = { path = "../json" }
+record = { path = "../record" }
 env_logger = "0.7.1"
 
 

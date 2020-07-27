@@ -13,15 +13,13 @@ use url::Url;
 type Item = str;
 
 pub struct Arg<I: AsRef<Item>> {
-    // pub client: reqwest::Client,
     pub client: client::Client,
     pub item: I,
-    // pub retry_count: usize,
 }
 
 impl<I: AsRef<Item>> Arg<I> {
     pub async fn url(&self) -> Result<Url> {
-        let url = &format!("https://avito.ru{}", 
+        let url = &format!("https://www.avito.ru{}", 
             self.item.as_ref(),
         );
         let url = Url::parse(&url)?;
@@ -30,23 +28,16 @@ impl<I: AsRef<Item>> Arg<I> {
 }
 
 use super::fetched::{Fetched};
-// use super::card::{Card, Record};
 
 pub struct Ret<I: AsRef<Item>> {
-    // pub client: reqwest::Client,
     pub client: client::Client,
     pub item: I,
     pub fetched: Fetched,
 }
 
 
-// const SLEEP_TIMEOUT: u64 = 500;
-//
-// use std::{thread, time};
-
 pub async fn run<I: AsRef<Item>>(arg: Arg<I>) -> Result<Ret<I>> {
     let url = arg.url().await?;
-    info!("url: {:?}", url);
 
     let (text, status) = arg.client.get_text_status(url.clone()).await.context("cards::fetch")?;
     match status {
@@ -65,76 +56,7 @@ pub async fn run<I: AsRef<Item>>(arg: Arg<I>) -> Result<Ret<I>> {
         },
     }
 
-    // let text = {
-    //     let text: Result<String>;
-    //     let mut remained = arg.retry_count;
-    //     loop {
-    //         let response = arg.client.get(url.clone()).send().await;
-    //         match response {
-    //             Err(err) => {
-    //                 if remained > 0 {
-    //                     remained -= 1;
-    //                     let duration = time::Duration::from_millis(SLEEP_TIMEOUT);
-    //                     thread::sleep(duration);
-    //                     continue;
-    //                 } else {
-    //                     error!("{}: {:?}", url, err);
-    //                     text = Err(Error::new(err));
-    //                     break;
-    //                 }
-    //             },
-    //             Ok(response) => {
-    //                 match response.status() {
-    //                     StatusCode::OK => {
-    //                         match response.text().await {
-    //                             Ok(t) => {
-    //                                 text = Ok(t);
-    //                                 break;
-    //                             },
-    //                             Err(err) => {
-    //                                 if remained > 0 {
-    //                                     remained -= 1;
-    //                                     let duration = time::Duration::from_millis(SLEEP_TIMEOUT);
-    //                                     thread::sleep(duration);
-    //                                     continue;
-    //                                 } else {
-    //                                     error!("{}: {:?}", url, err);
-    //                                     text = Err(Error::new(err));
-    //                                     break;
-    //                                 }
-    //                             },
-    //                         }
-    //                     },
-    //                     code @ StatusCode::NOT_FOUND => {
-    //                         let msg = response.text().await?;
-    //                         warn!("{} :: {}: {}", url, code, msg);
-    //                         return Ok(Ret {
-    //                             client: arg.client,
-    //                             item: arg.item, 
-    //                             fetched: Fetched::NotFound,
-    //                         })
-    //                     },
-    //                     code @ _ => {
-    //                         if remained > 0 {
-    //                             remained -= 1;
-    //                             let duration = time::Duration::from_millis(SLEEP_TIMEOUT);
-    //                             thread::sleep(duration);
-    //                             continue;
-    //                         } else {
-    //                             let msg = response.text().await?;
-    //                             error!("{} :: {}: {}", url, code, msg);
-    //                             text = Err(anyhow!("{} :: {}: {}", url, code, msg));
-    //                             break;
-    //                         }
-    //                     },
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     text
-    // }.context("cards::fetch")?;
-
-    let fetched = Fetched::parse(text, url)?;
+    let fetched = Fetched::parse(text, url).await?;
 
     Ok(Ret {
         client: arg.client,
@@ -142,6 +64,7 @@ pub async fn run<I: AsRef<Item>>(arg: Arg<I>) -> Result<Ret<I>> {
         fetched,
     })
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -158,8 +81,9 @@ mod tests {
     async fn test_fetch_only() -> Result<()> {
         init();
 
-        let pool = rmq::get_pool();
-        let client_provider = client::Provider::new(client::Kind::ViaProxy(pool));
+        let settings = rmq::Settings::new(std::path::Path::new("../../cnf/rmq/bikuzin18.toml"))?;
+        let pool = rmq::get_pool(settings)?;
+        let client_provider = client::Provider::new(client::Kind::ViaProxy(pool, "autocatalog".to_owned()));
         let client = client_provider.build().await?;
         let arg = Arg {
             client: client,
@@ -170,6 +94,7 @@ mod tests {
         match ret.fetched {
             Fetched::Records(vec_record) => {
                 assert_eq!(vec_record.len(), 31);
+                info!("vec_record: {}", serde_json::to_string_pretty(&vec_record)?);
             },
             _ => unreachable!(),
         }

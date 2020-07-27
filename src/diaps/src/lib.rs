@@ -24,8 +24,11 @@ pub struct Arg<'a> {
     /// count_limit - Максимальное количество объявлений в диапазоне, например 4900
     pub count_limit: u64, 
 
-    /// price_precision - Минимальный размер шага изменения верхней границы диапазона в процессе обнаружения диапазона, используется в условии останова, например 20000
-    pub price_precision: isize, 
+    /// diaps_count- желаемое количество диапазонов
+    pub diaps_count: usize,
+
+    // /// price_precision - Минимальный размер шага изменения верхней границы диапазона в процессе обнаружения диапазона, используется в условии останова, например 20000
+    // pub price_precision: isize, 
 
     /// price_max_inc - Величина, используемая при формировании первичного значения верхней границы диапазона на основе значения нижней, например 1000000
     pub price_max_inc: isize,
@@ -37,7 +40,8 @@ pub struct Arg<'a> {
 
 impl fmt::Display for Arg<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}:{}:{}", self.params, self.count_limit, self.price_precision, self.price_max_inc)
+        // write!(f, "{}:{}:{}:{}", self.params, self.count_limit, self.price_precision, self.price_max_inc)
+        write!(f, "{}:{}:{}", self.params, self.count_limit, self.price_max_inc)
     }
 }
 
@@ -143,7 +147,8 @@ pub async fn get<'a, Cb>(
 where 
     Cb: FnMut(CallbackArg) -> Result<()>,
 {
-    let Arg {params, count_limit, price_precision, price_max_inc, client_provider} = arg;
+    // let Arg {params, count_limit, price_precision, price_max_inc, client_provider} = arg;
+    let Arg {params, mut count_limit, diaps_count, price_max_inc, client_provider} = arg;
 
     let start = Instant::now();
 
@@ -158,9 +163,10 @@ where
     let mut count_total: Option<u64> = None;
     loop {
         let mut checks: usize = 0;
-        while need_continue(count, price_max_delta, count_limit, price_precision) {
+        // while need_continue(count, price_max_delta, count_limit, price_precision) {
+        while need_continue(count, count_limit) {
             let url = format!(
-                "https://avito.ru/api/9/items?key={}&{}&display=list&page=1&limit=1{}{}{}",
+                "https://avito.ru/api/9/items?key={}&categoryId=9&{}&display=list&page=1&sort=default&withImagesOnly=false&limit=1{}{}{}",
                 auth.key().await?,
                 params,         
                 match price_min { None => "".to_owned(), Some(price_min) => format!("&priceMin={}", price_min) },
@@ -196,8 +202,18 @@ where
             count = Some(count_src);
             if count_total.is_none() {
                 count_total = count;
+                let mut count_limit_calculated = count_src / diaps_count as u64;
+                if count_limit_calculated < count_limit {
+                    if count_limit_calculated < count_limit / 20 {
+                        count_limit_calculated = count_limit / 20
+                    }
+                    if count_limit_calculated < 50 {
+                        count_limit_calculated = 50;
+                    }
+                    info!("count_limit: {} => {}", count_limit, count_limit_calculated);
+                    count_limit = count_limit_calculated;
+                }
             }
-
             callback = if let Some(mut callback) = callback {
                 callback!(callback, start, count_total, checks_total, diaps, count, price_min, price_max, price_max_delta);
 
@@ -223,6 +239,9 @@ where
                                 div_round_closest(price_diap, 2)
                             };
                             let price_max_delta_new = price_max_new - price_max;
+                            if price_max_delta_new == 0 {
+                                break;
+                            }
                             (Some(price_max_new), Some(price_max_delta_new))
                         } else {
                             let price_max_new = price_min.unwrap_or(0) + price_max_inc;
@@ -236,6 +255,9 @@ where
                                 } else {
                                     - div_round_closest(price_max_delta, 2)
                                 };
+                                if price_max_new == price_max{
+                                    break;
+                                }
                                 (Some(price_max_new), Some(price_max_new - price_max))
                             } else {
                                 break;
@@ -292,21 +314,24 @@ fn div_round_closest(dividend: isize, divisor: isize) -> isize {
 /// Условие продолжения цикла формирования диапазона
 fn need_continue(
     count: Option<u64>, 
-    price_max_delta: Option<isize>, 
+    // price_max_delta: Option<isize>, 
     count_limit: u64, 
-    price_precision: isize,
+    // price_precision: isize,
 ) -> bool {
     match count {
         None => true,
         Some(count) => {
             count > count_limit ||
-            count < count_limit && match price_max_delta {
-                None => false,
-                Some(price_max_delta) => price_max_delta.abs() > price_precision,
-            }
+            count < count_limit * 80 / 100 
+            // && match price_max_delta {
+            //     None => false,
+            //     Some(price_max_delta) => price_max_delta.abs() > price_precision,
+            // }
         },
     }
 }
+
+
 
 // ============================================================================
 // ============================================================================
@@ -319,9 +344,9 @@ mod tests {
     use log::{error, warn, info, debug, trace};
     use super::*;
 
-    const COUNT_LIMIT: u64 = 4900;
-    const PRICE_PRECISION: isize = 20000;
-    const PRICE_MAX_INC: isize = 1000000;
+    // const COUNT_LIMIT: u64 = 4900;
+    // const PRICE_PRECISION: isize = 20000;
+    // const PRICE_MAX_INC: isize = 1000000;
 
     use term::Term;
 
@@ -342,20 +367,25 @@ mod tests {
 
     async fn helper(client_provider: client::Provider) -> Result<()> {
 
-        let count_limit: u64 = env::get("AVITO_COUNT_LIMIT", COUNT_LIMIT)?;
-        let price_precision: isize = env::get("AVITO_PRICE_PRECISION", PRICE_PRECISION)?;
-        let price_max_inc: isize = env::get("AVITO_PRICE_MAX_INC", PRICE_MAX_INC)?;
+        // let count_limit: u64 = env::get("AVITO_COUNT_LIMIT", COUNT_LIMIT)?;
+        // let price_precision: isize = env::get("AVITO_PRICE_PRECISION", PRICE_PRECISION)?;
+        // let price_max_inc: isize = env::get("AVITO_PRICE_MAX_INC", PRICE_MAX_INC)?;
+        let count_limit: u64 = 4900;
+        // let price_precision: isize = 10000;
+        let price_max_inc: isize = 20000000;
+        let diaps_count = 20;
 
-
-        let params = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
+        let params = "locationId=107620&params[110000]=329202&owner[]=private&sort=default&withImagesOnly=false";
+        // let params = "locationId=107620&owner[]=private&sort=default&withImagesOnly=false";
         let arg = Arg { 
             params, 
             count_limit, 
-            price_precision, 
+            diaps_count,
+            // price_precision, 
             price_max_inc,
             client_provider,
         };
-
+        std::env::set_var("AVITO_AUTH", "af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir");
 
         let mut term = Term::init(term::Arg::new().header("Определение диапазонов цен . . ."))?;
         let start = Instant::now();

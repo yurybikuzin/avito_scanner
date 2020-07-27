@@ -164,6 +164,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "pretty_env_logger",
+ "record",
  "regex",
  "reqwest",
  "rmq",
@@ -300,6 +301,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "pretty_env_logger",
+ "record",
  "regex",
  "rmq",
  "serde 1.0.114",
@@ -2017,6 +2019,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "record"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrange_millis",
+ "auth",
+ "client",
+ "env_logger",
+ "futures",
+ "http",
+ "ids",
+ "json",
+ "lazy_static",
+ "log 0.4.8",
+ "regex",
+ "serde 1.0.114",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2174,18 +2198,28 @@ dependencies = [
  "anyhow",
  "arrange_millis",
  "auth",
+ "autocatalog",
  "cards",
  "chrono",
  "client",
  "collect",
+ "config",
+ "csv",
  "diap_store",
  "diaps",
  "env",
  "id_store",
  "ids",
+ "lazy_static",
  "log 0.4.8",
  "pretty_env_logger",
+ "record",
+ "regex",
  "rmq",
+ "serde 1.0.114",
+ "serde_json",
+ "settings",
+ "structopt",
  "term",
  "to_csv",
  "tokio",
@@ -2327,6 +2361,35 @@ dependencies = [
  "itoa",
  "serde 1.0.114",
  "url",
+]
+
+[[package]]
+name = "settings"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrange_millis",
+ "auth",
+ "cards",
+ "chrono",
+ "client",
+ "collect",
+ "config",
+ "diap_store",
+ "diaps",
+ "env",
+ "id_store",
+ "ids",
+ "log 0.4.8",
+ "pretty_env_logger",
+ "rmq",
+ "serde 1.0.114",
+ "serde_json",
+ "structopt",
+ "term",
+ "to_csv",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

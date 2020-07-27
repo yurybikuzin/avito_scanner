@@ -8,16 +8,7 @@ services:
         tty: true
         environment:
             - TZ=Europe/Moscow
-            - RUST_LOG=warn
-            - AVITO_COUNT_LIMIT=$BW_AVITO_COUNT_LIMIT
-            - AVITO_PRICE_PRECISION=$BW_AVITO_PRICE_PRECISION
-            - AVITO_AUTH=$BW_AVITO_AUTH
-            - AVITO_PARAMS=$BW_AVITO_PARAMS
-            - BW_RABBITMQ_USER=$BW_PROD_RABBITMQ_USER
-            - BW_RABBITMQ_PASS=$BW_PROD_RABBITMQ_PASS
-            - BW_RABBITMQ_HOST=$BW_PROD_RABBITMQ_HOST
-            - BW_RABBITMQ_PORT=$BW_PROD_RABBITMQ_PORT
-            - BW_RABBITMQ_VHOST=$BW_PROD_RABBITMQ_VHOST
+            - RUST_LOG=info
         volumes:
             - $BW_HOST_CNF_DIR:/cnf
             - $BW_HOST_OUT_DIR:/out

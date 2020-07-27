@@ -1,3 +1,8 @@
+#[allow(unused_imports)]
+use log::{error, warn, info, debug, trace};
+#[allow(unused_imports)]
+use anyhow::{Result, Error, bail, anyhow};
+
 use std::sync::{Mutex, Arc};
 // use futures::future::{FutureExt};
 
@@ -16,23 +21,20 @@ impl<T> Promise<T> {
         }
     }
     pub fn resolve(&mut self, ret: T) {
+        trace!("promise resolved");
         let mut shared_state = self.shared_state.lock().unwrap();
         match shared_state.ret {
             Some(_) => unreachable!(),
             None => {
                 shared_state.ret.replace(ret);
                 if let Some(waker) = shared_state.waker.take() {
+                    trace!("promise wake");
                     waker.wake()
                 }
             },
         }
     }
 }
-
-// impl<T: ?Sized> FutureExt for T where T: Promise {}
-
-// impl<T> std::marker::Sized for Promise<T> {}
-// impl<T> FutureExt for Promise<T> {}
 
 impl<T> futures::Future for Promise<T> {
     type Output = T;

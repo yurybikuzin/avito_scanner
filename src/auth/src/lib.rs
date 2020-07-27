@@ -10,48 +10,75 @@ use http::StatusCode;
 // ============================================================================
 // ============================================================================
 
-const AUTH: &str = "AVITO_AUTH"; 
-const SERVICE_URL: &str = "http://auth:3000";
+// const AUTH: &str = "AVITO_AUTH"; 
+// const SERVICE_URL: &str = "http://auth:3000";
 
 pub type StringProvider = fn() -> Result<String>;
 
-pub struct Arg {
-    pub init: Option<StringProvider>,
-    pub fini: Option<StringProvider>,
+pub enum Arg {
+    Ready {
+        key: String
+    },
+    Lazy {
+        url: String,
+        init: Option<StringProvider>,
+        fini: Option<StringProvider>,
+    }
 }
+
+// pub struct Arg {
+//     pub init: Option<StringProvider>,
+//     pub fini: Option<StringProvider>,
+// }
 
 impl Arg {
-    pub fn new() -> Self {
-        Self { init: None, fini: None }
+    pub fn new_lazy(url: String) -> Self {
+        Self::Lazy { url, init: None, fini: None }
     }
-    pub fn init(mut self, sp: StringProvider) -> Self {
-        self.init = Some(sp);
-        self
+    pub fn new_ready(key: String) -> Self {
+        Self::Ready { key }
     }
-    pub fn fini(mut self, sp: StringProvider) -> Self {
-        self.fini = Some(sp);
-        self
+    pub fn init_lazy(self, sp: StringProvider) -> Self {
+        match self {
+            Self::Ready { key: _ } => self,
+            Self::Lazy { url, init: _, fini } => {
+                Self::Lazy {
+                    url, 
+                    init: Some(sp),
+                    fini,
+                }
+            }
+        }
+    }
+    pub fn fini_lazy(self, sp: StringProvider) -> Self {
+        match self {
+            Self::Ready { key: _ } => self,
+            Self::Lazy { url, init, fini: _ } => {
+                Self::Lazy {
+                    url, 
+                    fini: Some(sp),
+                    init,
+                }
+            }
+        }
     }
 }
 
-pub async fn get(arg: Option<Arg>) -> Result<String> {
-    match std::env::var(AUTH) {
-        Ok(auth) => {             
-            info!("from {}, auth::get: {}", AUTH, auth);
-            Ok(auth)
-        },
-        Err(_) => {
-            if let Some(arg) = &arg {
-                match arg.init {
-                    None => println!("Получение токена авторизации . . ."),
-                    Some(cb) => {
-                        let s = cb()?;
-                        println!("{}", s);
-                    },
-                }
+pub async fn get(arg: &Arg) -> Result<String> {
+    match arg {
+        Arg::Ready { key } => return Ok(key.to_owned()),
+        Arg::Lazy { url, init, fini } => {
+
+            match init {
+                None => println!("Получение токена авторизации . . ."),
+                Some(cb) => {
+                    let s = cb()?;
+                    println!("{}", s);
+                },
             }
+
             let start = Instant::now();
-            let response = reqwest::get(SERVICE_URL).await?;
+            let response = reqwest::get(url).await?;
             let auth = match response.status() {
                 StatusCode::OK => {
                     response.text().await?
@@ -66,32 +93,26 @@ pub async fn get(arg: Option<Arg>) -> Result<String> {
                     unreachable!();
                 },
             };
-            if let Some(arg) = arg {
-                match arg.init {
-                    None => println!("{}, Токен авторизации получен: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), auth),
-                    Some(cb) => {
-                        let s = cb()?;
-                        println!("{}", s);
-                    },
-                }
-            } else {
-                info!("{}, auth::get: {}", 
-                    arrange_millis::get(Instant::now().duration_since(start).as_millis()), 
-                    auth,
-                );
+            match fini {
+                None => println!("{}, Токен авторизации получен: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), auth),
+                Some(cb) => {
+                    let s = cb()?;
+                    println!("{}", s);
+                },
             }
             Ok(auth) // af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir
+
         },
     }
 }
 
 pub struct Lazy {
-    arg: Option<Arg>,
+    arg: Arg,
     key: Option<String>,
 }
 
 impl Lazy {
-    pub fn new(arg: Option<Arg>) -> Self { // arg=Some(key::Arg::new())
+    pub fn new(arg: Arg) -> Self { 
         Self {
             arg,
             key: None,
@@ -103,9 +124,7 @@ impl Lazy {
                 Ok(key.to_owned())
             }
             None => {
-                let mut arg: Option<Arg> = None;
-                std::mem::swap(&mut arg, &mut self.arg);
-                let key = get(arg).await?;
+                let key = get(&self.arg).await?;
                 self.key = Some(key.to_owned());
                 Ok(key)
             }
@@ -125,19 +144,10 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_get() -> Result<()> {
-        test_helper::init();
-
-        let _ = get(Some(Arg::new())).await?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_lazy() -> Result<()> {
         test_helper::init();
 
-        let mut auth = Lazy::new(Some(Arg::new()));
+        let mut auth = Lazy::new(Arg::new_ready("af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir".to_owned()));
         assert_eq!(auth.key, None);
 
         let key = auth.key().await?;

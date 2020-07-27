@@ -31,55 +31,80 @@ use std::collections::HashSet;
 // ============================================================================
 
 
-// type Items = collect::Autocatalog;
-pub struct Arg<'a> {
-    // pub items_to_check: &'a collect::Autocatalog, 
-    pub items_to_check: &'a HashSet<String>, 
-    pub out_dir: &'a Path, 
-    pub thread_limit_network: usize,
-    pub thread_limit_file: usize,
-    pub client_provider: client::Provider,
-    // pub retry_count: usize,
-}
-
-macro_rules! push_fut_fetch {
-    ($fut_queue: expr, $client: expr, $arg: expr, $items_to_fetch: expr, $items_to_fetch_i: expr) => {
-        let item = $items_to_fetch[$items_to_fetch_i].to_owned();
-        let arg = OpArg::Fetch (fetch::Arg {
-            client: $client,
-            item: item,
-            // retry_count: $arg.retry_count,
-        });
-        let fut = op(arg);
-        $fut_queue.push(fut);
-        $items_to_fetch_i += 1;
+macro_rules! fut_check {
+    ($fut_queue: expr, $fut_count: ident, $fut_count_max: expr, $fut_fill_from: expr, $out_dir: expr) => {
+        while $fut_count < $fut_count_max {
+            match $fut_fill_from.pop_front() {
+                None => break,
+                Some(item) => {
+                    let arg = op::Arg::Check (check::Arg {
+                        item,
+                        out_dir: $out_dir
+                    });
+                    $fut_queue.push(op::run(arg));
+                    $fut_count += 1;
+                },
+            }
+        }
     };
 }
 
-macro_rules! push_fut_save {
+macro_rules! fut_fetch {
+    ($fut_queue: expr, $fut_count: ident, $fut_count_max: expr, $fut_fill_from: expr, $client: block) => {
+        while $fut_count < $fut_count_max {
+            match $fut_fill_from.pop_front() {
+                None => break,
+                Some(item) => {
+                    let client = $client;
+                    fut_fetch!($fut_queue, $fut_count, item, client);
+                },
+            }
+        }
+    };
+    ($fut_queue: expr, $fut_count: ident, $fut_count_max: expr, $fut_fill_from: expr, $client: expr) => {
+        if $fut_count < $fut_count_max {
+            if let Some(item) = $fut_fill_from.pop_front() {
+                fut_fetch!($fut_queue, $fut_count, item, $client);
+            }
+        }
+    };
+    ($fut_queue: expr, $fut_count: ident, $item: expr, $client: expr) => {
+        let arg = op::Arg::Fetch (fetch::Arg { item: $item, client: $client });
+        $fut_queue.push(op::run(arg));
+        $fut_count += 1;
+    }
+}
+
+macro_rules! fut_save {
     ($fut_queue: expr, $fetched: expr, $item: expr, $out_dir: expr) => {
-        let arg = OpArg::Save (save::Arg {
+        let arg = op::Arg::Save (save::Arg {
             item: $item,
             fetched: $fetched,
             out_dir: $out_dir
         });
-        let fut = op(arg);
-        $fut_queue.push(fut);
+        $fut_queue.push(op::run(arg));
     };
 }
 
-macro_rules! push_fut_check {
-    ($fut_queue: expr, $id: expr, $out_dir: expr) => {
-        let arg = OpArg::Check (check::Arg {
-            item: $id,
-            out_dir: $out_dir
-        });
-        let fut = op(arg);
-        $fut_queue.push(fut);
-    };
-}
 
 macro_rules! callback {
+    ($callback: ident, $start: expr, $last_callback: ident, $elapsed_qt: ident, $remained_qt: ident, $block: block) => {
+        $callback = if let Some(mut callback) = $callback {
+
+            $block;
+
+            if let Some(start) = $start {
+                if $elapsed_qt > 0 && Instant::now().duration_since($last_callback).as_millis() > CALLBACK_THROTTLE {
+                    callback!(callback, start, $elapsed_qt, $remained_qt);
+                    $last_callback = Instant::now();
+                }
+            }
+            Some(callback)
+        } else {
+            None
+        };
+
+    };
     ($callback: expr, $start: expr, $elapsed_qt: expr, $remained_qt: expr) => {
         let elapsed_millis = Instant::now().duration_since($start).as_millis(); 
         let per_millis = elapsed_millis / $elapsed_qt as u128;
@@ -102,10 +127,33 @@ pub struct CallbackArg {
     pub per_millis: u128,
 }
 
+pub struct Arg<'a> {
+    pub items_to_check: &'a HashSet<String>, 
+    pub out_dir: &'a Path, 
+    pub thread_limit_network: usize,
+    pub thread_limit_file: usize,
+    pub client_provider: client::Provider,
+}
+
 pub struct Ret {
     pub received_qt: usize,
 }
 
+use std::path::PathBuf;
+use tokio::fs;
+use tokio::prelude::*;
+pub async fn get(out_dir: &Path, autocatalog_url: &str) -> Result<Record> {
+    let s = format!("{}{}.json", out_dir.to_string_lossy(), autocatalog_url);
+    let file_path = PathBuf::from(s);
+    let mut file = fs::File::open(&file_path).await.context(format!("{:?}", file_path))?;
+    let mut buffer = vec![];
+    file.read_to_end(&mut buffer).await?;
+    let s = std::str::from_utf8(&buffer)?;
+    let record = serde_json::from_str(s)?;
+    Ok(record)
+}
+
+use std::collections::VecDeque;
 const CALLBACK_THROTTLE: u128 = 100;
 pub async fn fetch_and_save<'a, Cb>(
     arg: Arg<'a>, 
@@ -114,21 +162,20 @@ pub async fn fetch_and_save<'a, Cb>(
 where 
     Cb: FnMut(CallbackArg) -> Result<()>,
 {
-    let mut items_to_fetch: Vec<String> = Vec::new();
-    let mut items_to_fetch_i: usize = 0;
+    let mut items_to_fetch: VecDeque<String> = VecDeque::new();
 
-    let mut items_to_check_i = 0;
-    let items_to_check = arg.items_to_check.iter().cloned().collect::<Vec<String>>();
+    let mut items_to_check: VecDeque<String> = VecDeque::with_capacity(arg.items_to_check.len()); 
+    for item in arg.items_to_check.iter() {
+        items_to_check.push_back(item.to_owned())
+    }
 
     let mut items_to_fetch_uniq: HashSet<String> = HashSet::new();
 
     let mut fut_queue = FuturesUnordered::new();
-    while items_to_check_i < arg.thread_limit_file && items_to_check_i < items_to_check.len() {
-        let item_to_check = items_to_check[items_to_check_i].to_owned();
-        push_fut_check!(fut_queue, item_to_check, arg.out_dir);
-        items_to_check_i += 1;
-    }
-    let mut used_network_threads: usize = 0;
+    let mut fut_check_count = 0usize;
+    let mut fut_fetch_count = 0usize;
+
+    fut_check!(fut_queue, fut_check_count, arg.thread_limit_file, items_to_check, arg.out_dir);
 
     let mut received_qt = 0;
     let mut elapsed_qt = 0;
@@ -144,65 +191,48 @@ where
                     },
                     Ok(ret) => {
                         match ret {
-                            OpRet::Save(_) => {},
-                            OpRet::Check(check::Ret{item_to_fetch}) => {
+                            op::Ret::Save(_) => {},
+                            // Пришел результат проверки сущестсования ранее скачанного
+                            // автокаталога
+                            // Если автокаталог еще не скачан, то получаем Some(item_to_fetch)
+                            op::Ret::Check(check::Ret{item_to_fetch}) => {
+                                fut_check_count -= 1;
                                 if let Some(item_to_fetch) = item_to_fetch {
                                     if items_to_fetch.len() == 0 {
                                         start = Some(Instant::now());
                                     }
                                     if !items_to_fetch_uniq.contains(&item_to_fetch) {
-                                        items_to_fetch.push(item_to_fetch.to_owned());
+                                        items_to_fetch.push_back(item_to_fetch.to_owned());
                                         items_to_fetch_uniq.insert(item_to_fetch.to_owned());
                                     }
-                                    callback = if let Some(mut callback) = callback {
+
+                                    callback!(callback, start, last_callback, elapsed_qt, remained_qt, {
                                         remained_qt += 1;
-                                        if let Some(start) = start {
-                                            if elapsed_qt > 0 && Instant::now().duration_since(last_callback).as_millis() > CALLBACK_THROTTLE {
-                                                callback!(callback, start, elapsed_qt, remained_qt);
-                                                last_callback = Instant::now();
-                                            }
-                                        }
-                                        Some(callback)
-                                    } else {
-                                        None
-                                    };
-                                    if used_network_threads < arg.thread_limit_network {
-                                        // let client = reqwest::Client::new();
-                                        let client = arg.client_provider.build().await?;
-                                        push_fut_fetch!(fut_queue, client, arg, items_to_fetch, items_to_fetch_i);
-                                        used_network_threads += 1;
-                                    }
+                                    });
+
+                                    fut_fetch!(
+                                        fut_queue, 
+                                        fut_fetch_count, 
+                                        arg.thread_limit_network, 
+                                        items_to_fetch, 
+                                        { arg.client_provider.build().await? } 
+                                    );
                                 }
-                                if items_to_check_i < items_to_check.len() {
-                                    let item_to_check = items_to_check[items_to_check_i].to_owned();
-                                    push_fut_check!(fut_queue, item_to_check, arg.out_dir);
-                                    items_to_fetch_i += 1;
-                                }
+                                fut_check!(fut_queue, fut_check_count, arg.thread_limit_file, items_to_check, arg.out_dir);
                             },
-                            OpRet::Fetch(ret) => {
-                                callback = if let Some(mut callback) = callback {
+                            op::Ret::Fetch(ret) => {
+                                fut_fetch_count -= 1;
+                                fut_fetch!(fut_queue, fut_fetch_count, arg.thread_limit_network, items_to_fetch, ret.client );
+                                // trace!("fetch: {:?}", ret.fetched);
+                                callback!(callback, start, last_callback, elapsed_qt, remained_qt, {
                                     elapsed_qt += 1;
                                     if remained_qt > 0 {
                                         remained_qt -= 1;
                                     }
-                                    if let Some(start) = start {
-                                        if elapsed_qt > 0 && Instant::now().duration_since(last_callback).as_millis() > CALLBACK_THROTTLE {
-                                            callback!(callback, start, elapsed_qt, remained_qt);
-                                            last_callback = Instant::now();
-                                        }
-                                    }
-                                    Some(callback)
-                                } else {
-                                    None
-                                };
+                                });
+
+                                fut_save!(fut_queue, ret.fetched, ret.item, arg.out_dir);
                                 received_qt += 1;
-                                push_fut_save!(fut_queue, ret.fetched, ret.item, arg.out_dir);
-                                if items_to_fetch_i < items_to_fetch.len() {
-                                    let client = ret.client;
-                                    push_fut_fetch!(fut_queue, client, arg, items_to_fetch, items_to_fetch_i);
-                                } else {
-                                    used_network_threads -= 1;
-                                }
                             },
                         }
                     },
@@ -226,33 +256,37 @@ where
     Ok(Ret{received_qt})
 }
 
-type Item = str;
-enum OpArg<'a, I: AsRef<Item>, P: AsRef<Path>> {
-    Fetch(fetch::Arg<I>),
-    Save(save::Arg<I, P>),
-    Check(check::Arg<'a>),
-}
+mod op {
+    use super::*;
 
-enum OpRet<I: AsRef<Item>> {
-    Fetch(fetch::Ret<I>),
-    Save(save::Ret),
-    Check(check::Ret),
-}
+    type Item = str;
+    pub enum Arg<'a, I: AsRef<Item>, P: AsRef<Path>> {
+        Fetch(fetch::Arg<I>),
+        Save(save::Arg<I, P>),
+        Check(check::Arg<'a>),
+    }
 
-async fn op<'a, I: AsRef<Item>, P: AsRef<Path>>(arg: OpArg<'a, I, P>) -> Result<OpRet<I>> {
-    match arg {
-        OpArg::Fetch(arg) => {
-            let ret = fetch::run(arg).await?;
-            Ok(OpRet::Fetch(ret))
-        },
-        OpArg::Save(arg) => {
-            let ret = save::run(arg).await?;
-            Ok(OpRet::Save(ret))
-        },
-        OpArg::Check(arg) => {
-            let ret = check::run(arg).await?;
-            Ok(OpRet::Check(ret))
-        },
+    pub enum Ret<I: AsRef<Item>> {
+        Fetch(fetch::Ret<I>),
+        Save(save::Ret),
+        Check(check::Ret),
+    }
+
+    pub async fn run<'a, I: AsRef<Item>, P: AsRef<Path>>(arg: Arg<'a, I, P>) -> Result<Ret<I>> {
+        match arg {
+            Arg::Fetch(arg) => {
+                let ret = fetch::run(arg).await?;
+                Ok(Ret::Fetch(ret))
+            },
+            Arg::Save(arg) => {
+                let ret = save::run(arg).await?;
+                Ok(Ret::Save(ret))
+            },
+            Arg::Check(arg) => {
+                let ret = check::run(arg).await?;
+                Ok(Ret::Check(ret))
+            },
+        }
     }
 }
 
@@ -290,12 +324,13 @@ mod tests {
         ;
         let items: HashSet<String> = HashSet::from_iter(items.iter().cloned());
         let out_dir = Path::new("out_test");
+        let settings = rmq::Settings::new(std::path::Path::new("../../cnf/rmq/bikuzin18.toml"))?;
         let arg = Arg {
             items_to_check: &items,
             out_dir,
-            thread_limit_network: 1,
+            thread_limit_network: 50,
             thread_limit_file: 2,
-            client_provider: client::Provider::new(client::Kind::ViaProxy(rmq::get_pool())),
+            client_provider: client::Provider::new(client::Kind::ViaProxy(rmq::get_pool(settings)?, "autocatalog".to_owned())),
             // retry_count: 3,
         };
 

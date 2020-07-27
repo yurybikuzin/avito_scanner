@@ -6,7 +6,6 @@ use anyhow::{anyhow, bail, Result, Error, Context};
 
 use std::collections::VecDeque;
 use std::time::Duration;
-use futures::{StreamExt};
 use rmq::{
     get_conn, 
     get_queue, 
@@ -22,6 +21,7 @@ use req::Req;
 use res::Res;
 
 use futures::{
+    StreamExt,
     channel::mpsc::{self, Receiver, Sender},
     select,
     pin_mut,

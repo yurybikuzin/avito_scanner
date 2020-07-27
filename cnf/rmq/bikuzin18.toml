@@ -1,0 +1,6 @@
+host = "bikuzin18.baza-winner.ru"
+port = 42997
+pass = "bjf9KbPB"
+user = "rmq"
+vhost = "%2f"
+

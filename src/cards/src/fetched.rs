@@ -14,64 +14,6 @@ use std::path::Path;
 use tokio::fs;
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Record {
-    pub body_type: Option<String>,
-    pub brand: Option<String>,
-    pub color: Option<String>,
-    pub fuel_type: Option<String>,
-    // modelDate - год модели
-    pub name: Option<String>,
-    pub number_of_doors: Option<u8>,
-    pub production_date: Option<u16>,
-    // vehicle_configuration
-    pub vehicle_transmission: Option<String>,
-    pub engine_displacement: Option<String>,
-    pub engine_power: Option<String>,
-    pub description: Option<String>,
-    pub mileage: Option<u64>,
-    // Комлектация
-    #[serde(rename = "Привод")]
-    pub drive: Option<String>,
-    #[serde(rename = "Руль")]
-    pub steering_wheel: Option<String>,
-    #[serde(rename = "Состояние")]
-    pub condition: Option<String>,
-    #[serde(rename = "Владельцы")]
-    pub owners: Option<String>,
-    // ПТС
-    // Таможня
-    // Владение
-    // id
-
-    #[serde(rename = "Электростеклоподъемники")]
-    pub power_windows: Option<String>,
-    #[serde(rename = "Усилитель руля")]
-    pub power_steering: Option<String>,
-    #[serde(rename = "Аудиосистема")]
-    pub audio_system: Option<String>,
-    #[serde(rename = "Фары")]
-    pub headlights: Option<String>,
-    #[serde(rename = "Климат-контроль")]
-    pub climate_control: Option<String>,
-    #[serde(rename = "Салон")]
-    pub interior: Option<String>,
-    #[serde(rename = "Диски")]
-    pub rims: Option<String>,
-
-    #[serde(rename = "autoCatalogUrl")]
-    pub autocatalog_url: Option<String>,
-
-    pub item_price: Option<u64>,
-    pub market_price: Option<u64>,
-
-    pub status: Option<String>,
-    pub closing_reason: Option<String>,
-    pub type_of_trade: Option<String>,
-    pub canonical_url: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub enum Fetched {
     NotFound,
     NoText,
@@ -81,6 +23,7 @@ pub enum Fetched {
     },
     Record(Record)
 }
+pub type Record = record::card::Record;
 
 use url::Url;
 use json::{Json, By};
@@ -102,6 +45,7 @@ impl Fetched {
     pub fn parse_json(json: &Json) -> Result<Record> {
         let mut power_windows: Option<String> = None;
         let mut name: Option<String> = None;
+        let title = None;
         let mut canonical_url: Option<String> = None;
         let mut item_price: Option<u64> = None;
         let mut market_price: Option<u64> = None;
@@ -383,6 +327,7 @@ impl Fetched {
         Ok(Record {
             power_windows,
             name,
+            title,
             canonical_url,
             item_price,
             market_price,
@@ -411,6 +356,68 @@ impl Fetched {
             mileage,
             status,
             closing_reason,
+
+            autocatalog_id: None,
+            autocatalog_title: None,
+
+            autocatalog_transmission: None,
+
+            autocatalog_engine_displacement: None,
+            autocatalog_engine_displacement_precise: None,
+
+            autocatalog_drive: None,
+            autocatalog_fuel_type: None,
+
+            autocatalog_engine_power: None,
+            autocatalog_maximum_speed: None,
+            autocatalog_acceleration: None,
+
+            autocatalog_brand_country: None,
+            autocatalog_assembly_country: None,
+
+            autocatalog_number_of_seats: None,
+
+            autocatalog_rating: None,
+
+            autocatalog_number_of_cylinders: None,
+            autocatalog_configuration: None,
+
+            autocatalog_torque: None,
+            autocatalog_torque_max: None,
+            autocatalog_max_power_speed: None,
+
+            autocatalog_height: None,
+            autocatalog_length: None,
+            autocatalog_turning_diameter: None,
+            autocatalog_clearance: None,
+            autocatalog_wheelbase: None,
+            autocatalog_rear_track: None,
+            autocatalog_front_track: None,
+
+            autocatalog_trunk_volume: None,
+
+            autocatalog_fuel_tank_capacity: None,
+
+            autocatalog_fuel_consumption_city: None,
+            autocatalog_fuel_consumption_highway: None,
+            autocatalog_fuel_consumption_mixed: None,
+
+            autocatalog_environmental_class: None,
+
+            autocatalog_rear_breaks: None,
+            autocatalog_front_breaks: None,
+
+            autocatalog_rear_tire_dimension: None,
+            autocatalog_front_tire_dimension: None,
+
+            autocatalog_rear_suspension: None,
+            autocatalog_front_suspension: None,
+
+            autocatalog_world_premier: None,
+            autocatalog_pending_update: None,
+            autocatalog_width_with_mirrors: None,
+            autocatalog_rear_disc_dimension: None,
+            autocatalog_front_disc_dimension: None,
         })
     }
 }

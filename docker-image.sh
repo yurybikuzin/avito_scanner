@@ -1,9 +1,13 @@
 #!/usr/bin/env bash 
 
-# Version 2.0.0, 2020-07-01
+# Version 3.2.0, 2020-07-27
 
-set -e
+# Change log:
 
+# 3.2.0, 2020-07-27
+#    - added "' || exit $?" at 114 line
+
+env_src=(.env prod/.env)
 cmdname=${0##*/}
 
 echoerr() { 
@@ -18,7 +22,7 @@ Description:
 Usage:
     $cmdname [--help | [SERVICE] [-b] ]
 params:
-    TARGET      'dev' or 'prod', 'dev' by default
+    TARGET      'dev' or 'prod', 'prod' by default
     SERVICE     from self-titled subfolder at ./TARGET/, 'proj' by default
 options:
     -b          build only, no push
@@ -78,7 +82,7 @@ do
 done
 
 if [[ ! $target ]]; then
-    target=dev
+    target=prod
 fi
 TARGET=${target^^}
 
@@ -87,13 +91,13 @@ if [[ ! $service ]]; then
 fi
 SERVICE=${service^^}
 
-bw_version=$(env $(cat .env prod/.env | grep -v '#' | xargs) bash -c 'echo $BW_'$TARGET'_'$SERVICE'_VERSION')
+bw_version=$(env $(cat "${env_src[@]}" | grep -v '#' | xargs) bash -c 'echo $BW_'$TARGET'_'$SERVICE'_VERSION')
 if [[ ! $bw_version ]]; then
-    echoerr "BW_${TARGET}_${SERVICE}_VERSION value must be specified in file'.env'/'prod/.env'"
+    echoerr "BW_${TARGET}_${SERVICE}_VERSION value must be specified in ${env_src[@]}"
     exit 1
 fi
 
-version_fspec="$target.yml"
+version_fspec="$target/ver.yml"
 did_version=$(cat "$version_fspec" | sed -nr "s/^$service:[[:space:]]*([^[:space:]])/\1/p;")
 if [[ ! $did_version ]]; then
     echoerr "$service: VERSION not found in file'$version_fspec'"
@@ -101,15 +105,17 @@ if [[ ! $did_version ]]; then
 fi
 
 if [[ ! $build_only && $bw_version == $did_version ]]; then
-    echoerr "BW_${TARGET}_${SERVICE}_VERSION ($bw_version) in file'.env'/'prod/.env' must differ (be bigger) than version ($did_version) in file'$version_fspec' in line: $service: $did_version"
+    echoerr "BW_${TARGET}_${SERVICE}_VERSION ($bw_version) in ${env_src[@]} must differ (be bigger) than version ($did_version) in file'$version_fspec' in line: $service: $did_version"
     exit 1
 fi
 
 if [[ -e "$target/$service/before.sh" ]]; then
-    env $(cat .env prod/.env | grep -v '#' | xargs) bash -c $target/$service/before.sh
+    env $(cat ${env_src[@]} | grep -v '#' | xargs) bash -c '\
+        '$target/$service/'before.sh
+    ' || exit $?
 fi
 
-env $(cat .env prod/.env | grep -v '#' | xargs) bash -c '\
+env $(cat ${env_src[@]} | grep -v '#' | xargs) bash -c '\
     tag=bazawinner/'$target'-$BW_PROJ_NAME-'$service':$BW_'$TARGET'_'$SERVICE'_VERSION
     echo Building $tag . . .
     docker build '${opts[@]}' \

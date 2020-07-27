@@ -20,6 +20,8 @@ use futures::{
 };
 
 use client::{Client};
+// https://m.avito.ru/api/9/items?key=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir&locationId=107620&params[110000]=329202&owner[]=private&sort=default&withImagesOnly=false&lastStamp=1595587140&display=list&page=1&limit=50&priceMax=393073
+// https://m.avito.ru/api/9/items?key=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir&params[110000]=329230&categoryId=9&locationId=637640&privateOnly=1&searchRadius=100&sort=default&owner[]=private&page=3&lastStamp=1595584320&display=list&limit=30&pageId=H4sIAAAAAAAAA0u0MrSqLrYyNLRSKskvScyJT8svzUtRss60MjYwNbKuBQAkWBn0IAAAAA
 
 // ============================================================================
 // ============================================================================
@@ -191,7 +193,7 @@ async fn fetch(arg: FetchArg) -> Result<FetchRet>{
 
     let count = json.get("result")
         .and_then(|val| val.get("count"))
-        .ok_or(anyhow!("could not obtain result.count"))?
+        .ok_or(anyhow!("could not obtain result.count from '{}': {}", url, serde_json::to_string_pretty(&json)?))?
     ;
     let count = match count {
         Value::Number(number) => number.as_u64().ok_or(anyhow!("result.count expected to be u64, not {}", number))? as usize,
@@ -285,9 +287,12 @@ mod tests {
     use super::*;
 
     use term::Term;
+// https://m.avito.ru/api/9/items?key=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir&locationId=107620&params[110000]=329202&owner[]=private&sort=default&withImagesOnly=false&lastStamp=1595587140&display=list&page=1&limit=50&priceMax=393073
+// https://m.avito.ru/api/9/items?key=af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir&page=1&lastStamp=1595584320&display=list&limit=30&url=%2Fmoskva%2Favtomobili%2Fford-ASgBAgICAUTgtg2cmCg%3Fuser%3D1
 
-    const PARAMS: &str = "categoryId=9&locationId=637640&searchRadius=0&privateOnly=1&sort=date&owner[]=private";
-    const THREAD_LIMIT_NETWORK: usize = 1;
+    // const PARAMS: &str = "locationId=107620&params[110000]=329202&owner[]=private&sort=default&withImagesOnly=false";
+    const PARAMS: &str = "locationId=107620&owner[]=private&sort=default&withImagesOnly=false";
+    const THREAD_LIMIT_NETWORK: usize = 50;
     const ITEMS_PER_PAGE: usize = 50;
 
     #[tokio::test]
@@ -295,67 +300,67 @@ mod tests {
         test_helper::init();
 
         let diaps_ret_source = r#"{
-          "last_stamp": 1593162840,
+          "last_stamp": 1595587140,
           "diaps": [
             {
               "price_min": null,
-              "price_max": 234376,
-              "count": 4741,
-              "checks": 7
+              "price_max": 393073,
+              "count": 500,
+              "checks": 15
             },
             {
-              "price_min": 234377,
-              "price_max": 379514,
-              "count": 4839,
-              "checks": 9
+              "price_min": 393074,
+              "price_max": 611728,
+              "count": 500,
+              "checks": 13
             },
             {
-              "price_min": 379515,
-              "price_max": 520615,
-              "count": 4720,
-              "checks": 9
+              "price_min": 611729,
+              "price_max": 896093,
+              "count": 491,
+              "checks": 13
             },
             {
-              "price_min": 520616,
-              "price_max": 739205,
-              "count": 4711,
-              "checks": 8
+              "price_min": 896094,
+              "price_max": 1248012,
+              "count": 471,
+              "checks": 13
             },
             {
-              "price_min": 739206,
-              "price_max": 1200685,
-              "count": 4822,
-              "checks": 12
+              "price_min": 1248013,
+              "price_max": 1953937,
+              "count": 484,
+              "checks": 13
             },
             {
-              "price_min": 1200686,
-              "price_max": 2200686,
-              "count": 3378,
-              "checks": 2
-            },
-            {
-              "price_min": 2200687,
+              "price_min": 1953938,
               "price_max": null,
-              "count": 1735,
+              "count": 391,
               "checks": 1
             }
           ],
-          "checks_total": 48
+          "checks_total": 68
         }"#;
 
         let diaps_ret: diaps::Ret = serde_json::from_str(diaps_ret_source)?;
 
-        let params = env::get("AVITO_PARAMS", PARAMS.to_owned())?;
-        let thread_limit_network = env::get("AVITO_THREAD_LIMIT_NETWORK", THREAD_LIMIT_NETWORK)?;
-        let items_per_page = env::get("AVITO_ITEMS_PER_PAGE", ITEMS_PER_PAGE)?;
+        // let params = env::get("AVITO_PARAMS", PARAMS.to_owned())?;
+        // let thread_limit_network = env::get("AVITO_THREAD_LIMIT_NETWORK", THREAD_LIMIT_NETWORK)?;
+        // let items_per_page = env::get("AVITO_ITEMS_PER_PAGE", ITEMS_PER_PAGE)?;
+        let params = PARAMS.to_owned();
+        let thread_limit_network = THREAD_LIMIT_NETWORK;
+        let items_per_page = ITEMS_PER_PAGE;
 
+        let file_path = std::path::Path::new("/cnf/rmq/bikuzin18.toml");
+        let settings_rmq = rmq::Settings::new(file_path).map_err(|err| anyhow!("{:?}: {}", file_path, err))?;
         let arg = Arg {
             params: &params,
             diaps_ret: &diaps_ret, 
             thread_limit_network,
             items_per_page,
-            client_provider: client::Provider::new(client::Kind::ViaProxy(rmq::get_pool())),
+            client_provider: client::Provider::new(client::Kind::ViaProxy(rmq::get_pool(settings_rmq)?, "ids".to_owned())),
         };
+        std::env::set_var("AVITO_AUTH", "af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir");
         let mut auth = auth::Lazy::new(Some(auth::Arg::new()));
 
         let mut term = Term::init(term::Arg::new().header("Получение списка идентификаторов . . ."))?;

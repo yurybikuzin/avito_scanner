@@ -10,10 +10,11 @@ use url::Url;
 
 use futures::{
     StreamExt,
-    future::{
-        Fuse, 
-        FutureExt,// for `.fuse()`
-    }, 
+    channel::mpsc::{self, Receiver, Sender},
+    // future::{
+    //     // Fuse, 
+    //     // FutureExt,// for `.fuse()`
+    // }, 
     select,
     pin_mut,
 };
@@ -68,7 +69,24 @@ struct Res {
     text: String,
 }
 
-use tokio::sync::mpsc;
+macro_rules! get_receiver {
+    ($receiver: ident, $consumer: expr, $kind: expr, $thread_pool: expr) => {
+        let (mut sender, mut $receiver): (Sender<(String, u64)>, Receiver<(String, u64)>) = mpsc::channel(1000);
+        $thread_pool.spawn_ok(async move {
+            while let Some(consumer_next) = $consumer.next().await {
+                if let Ok((_channel, delivery)) = consumer_next {
+                    let s = std::str::from_utf8(&delivery.data).unwrap();
+                    sender.try_send((s.to_owned(), delivery.delivery_tag)).unwrap();
+                } else {
+                    error!("{}: Err(err) = consumer_next", $kind);
+                }
+            }
+            error!("{}: consumer stopped", $kind);
+        });
+    };
+}
+
+// use tokio::sync::mpsc;
 impl Client {
     pub async fn new(pool: rmq::Pool, queue_name: String) -> Result<Self> {
         Self::new_special(pool, queue_name).await
@@ -78,7 +96,7 @@ impl Client {
         let broker = match brokers.get(reply_to.as_str()) {
             Some(broker) => broker.clone(),
             None => {
-                let (sender, mut receiver): (mpsc::Sender<Msg>, mpsc::Receiver<Msg>) = mpsc::channel(10000);
+                let (sender, mut receiver_request): (mpsc::Sender<Msg>, mpsc::Receiver<Msg>) = mpsc::channel(10000);
                 let broker_name = reply_to.to_owned();
                 let broker = Arc::new(Broker {
                     name: broker_name.to_owned(),
@@ -95,31 +113,42 @@ impl Client {
                         let consumer_tag = format!("{}_consumer", reply_to);
                         let mut consumer = rmq::basic_consume(&channel, queue_name, consumer_tag).await?;
 
+                        let thread_pool = ThreadPool::new().unwrap();
+                        get_receiver!(receiver_response, consumer, "response", thread_pool);
+
+                        let receiver_response_fut = receiver_response.next();
+                        pin_mut!(receiver_response_fut);
+
                         let mut reqs: HashMap<uuid::Uuid, Promise<Res>> = HashMap::new();
-                        let mut stop_promise = None;
+                        // let mut stop_promise = None;
+                        let receiver_request_fut = receiver_request.next();
+                        pin_mut!(receiver_request_fut);
                         loop {
-                            let consumer_next_fut = if stop_promise.is_some() {
-                                Fuse::terminated()
-                            } else {
-                                consumer.next().fuse()
-                            };
-                            let receiver_next_fut = if stop_promise.is_some() {
-                                Fuse::terminated()
-                            } else {
-                                receiver.next().fuse()
-                            };
-                            pin_mut!(consumer_next_fut);
-                            pin_mut!(receiver_next_fut);
+                            // let consumer_next_fut = if stop_promise.is_some() {
+                            //     Fuse::terminated()
+                            // } else {
+                            //     consumer.next().fuse()
+                            // };
+                            // let receiver_request_fut = if stop_promise.is_some() {
+                            //     Fuse::terminated()
+                            // } else {
+                            //     receiver_request.next().fuse()
+                            // };
+                            // pin_mut!(consumer_next_fut);
+                            // pin_mut!(receiver_request_fut);
                             select! {
-                                receiver_next_opt = receiver_next_fut => {
-                                    trace!("received: {:?}", receiver_next_opt);
+                                receiver_next_opt = receiver_request_fut => {
                                     if let Some(receiver_next) = receiver_next_opt {
                                         match receiver_next {
-                                            Msg::Stop(promise) => {
-                                                stop_promise = Some(promise);
+                                            Msg::Stop(mut stop_promise) => {
+                                                trace!("received stop signal");
+                                                // stop_promise = Some(promise);
+                                                stop_promise.resolve(());
+                                                break;
                                             },
                                             Msg::Req (Req { url, mut promise }) => {
                                                 let correlation_id = uuid::Uuid::new_v4();
+                                                trace!("received request, made correlation_id: {:?}", correlation_id);
                                                 reqs.insert(correlation_id, promise);
                                                 let req = req::Req {
                                                     correlation_id,
@@ -138,22 +167,26 @@ impl Client {
                                         error!("receiver_next_opt.is_none()");
                                     }
                                 },
-                                consumer_next_opt = consumer_next_fut => {
-                                    trace!("consumed: {:?}", consumer_next_opt);
-                                    if let Some(consumer_next) = consumer_next_opt {
-                                        if let Ok((channel, delivery)) = consumer_next {
-                                            let s  = std::str::from_utf8(&delivery.data)?;
+                                ret = receiver_response_fut => {
+                                    // if let Some(consumer_next) = consumer_next_opt {
+                                    //     if let Ok((channel, delivery)) = consumer_next {
+                                        if let Some((s, delivery_tag)) = ret {
+                                            trace!("consumed: {:?}", delivery_tag);
+                                            // let s  = std::str::from_utf8(&delivery.data)?;
                                             let res: res::Res = serde_json::from_str(&s).context("via_proxy::Client::get_text()")?;
-                                            rmq::basic_ack(&channel, delivery.delivery_tag).await?;
+                                            rmq::basic_ack(&channel, delivery_tag).await?;
                                             if let Some(mut promise) = reqs.remove(&res.correlation_id) {
                                                 promise.resolve(Res { status: res.status, text: res.text });
+                                                trace!("promise resolved for correlation_id: {}", res.correlation_id);
+                                            } else {
+                                                warn!("no promise for correlation_id {}", res.correlation_id);
                                             }
                                         } else {
                                             error!("Err(err) = consumer_next");
                                         }
-                                    } else {
-                                        error!("consumer_next_opt.is_none()");
-                                    }
+                                    // } else {
+                                    //     error!("consumer_next_opt.is_none()");
+                                    // }
                                 },
                                 complete => {
                                     trace!("complete");
@@ -161,9 +194,9 @@ impl Client {
                                 },
                             }
                         }
-                        if let Some(mut stop_promise) = stop_promise {
-                            stop_promise.resolve(());
-                        }
+                        // if let Some(mut stop_promise) = stop_promise {
+                        //     stop_promise.resolve(());
+                        // }
                         trace!("out future {:?}", queue_name);
                         Ok::<(), Error>(())
                     };
@@ -183,14 +216,18 @@ impl Client {
     }
     pub async fn send_stop(&mut self) {
         let promise: Promise<()> = Promise::new();
-        &self.broker.sender.lock().unwrap().send(Msg::Stop(promise.clone())).await.unwrap();
+        // &self.broker.sender.lock().unwrap().send(Msg::Stop(promise.clone())).await.unwrap();
+        &self.broker.sender.lock().unwrap().try_send(Msg::Stop(promise.clone())).unwrap();
         promise.await;
     }
     pub async fn get_text_status(&self, url: Url) -> Result<(String, http::StatusCode)> {
         let promise: Promise<Res> = Promise::new();
-        let req = Req { url, promise: promise.clone() };
-        &self.broker.sender.lock().unwrap().send(Msg::Req(req)).await?;
+        let req = Req { url: url.clone(), promise: promise.clone() };
+        // &self.broker.sender.lock().unwrap().send(Msg::Req(req)).await?;
+        &self.broker.sender.lock().unwrap().try_send(Msg::Req(req)).unwrap();
+        trace!("get_text_status is waiting for promise of {}", url);
         let res = promise.await;
+        trace!("resolved get_text_status for {}", url);
         return Ok((res.text, res.status))
     }
 }

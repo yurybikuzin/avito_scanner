@@ -1,0 +1,22 @@
+
+out_dir = "/out"
+
+auth_key = "af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir"
+
+# Москва и Подмосковье
+params = "locationId=107620&owner[]=private&sort=default&withImagesOnly=false"
+
+# Москва 
+# params = "locationId=637640&searchRadius=0&owner[]=private&sort=default&withImagesOnly=false"
+
+count_limit = 4900
+price_precision = 10000
+price_max_inc = 20000000
+diaps_count = 20
+id_fresh_duration_mins = 1440
+thread_limit_network = 100
+thread_limit_file = 6
+diap_fresh_duration_mins = 1440
+items_per_page = 50
+
+

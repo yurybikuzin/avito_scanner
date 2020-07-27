@@ -1,9 +1,8 @@
 [package]
-name = "scan"
+name = "settings"
 version = "0.1.0"
 authors = ["Yury Bikuzin <yury.bikuzin@gmail.com>"]
 edition = "2018"
-default-run = "scan" # https://stackoverflow.com/questions/51785457/how-can-i-specify-which-crate-cargo-run-runs-by-default-in-the-root-of-a-cargo
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -35,12 +34,6 @@ collect = { path = "../collect" }
 to_csv = { path = "../to_csv" }
 client = { path = "../client" }
 rmq = { path = "../rmq" }
-settings = { path = "../settings" }
-autocatalog = { path = "../autocatalog" }
-record = { path = "../record" }
-csv = "1.1"
-regex = "1.3.9"
-lazy_static = "1.4.0"
 
 # url = "2.1.1"
 # reqwest = { version = "0.10.6", features = ["json"] }

@@ -1,6 +1,7 @@
 [workspace]
 default-members = [ "scan", "proxy" ]
 members = [ 
+    "record",
     "term", 
     "env", 
     "json",
@@ -22,5 +23,6 @@ members = [
     "promise",
     "client",
     "test_helper",
+    "settings",
 ]
 
