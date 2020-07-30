@@ -301,7 +301,6 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "pretty_env_logger",
- "record",
  "regex",
  "rmq",
  "serde 1.0.114",
@@ -418,6 +417,26 @@ dependencies = [
  "serde_json",
  "toml",
  "yaml-rust",
+]
+
+[[package]]
+name = "convert"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrange_millis",
+ "cards",
+ "futures",
+ "json",
+ "lazy_static",
+ "log 0.4.8",
+ "regex",
+ "serde 1.0.114",
+ "serde_json",
+ "term",
+ "test_helper",
+ "to_csv",
+ "tokio",
 ]
 
 [[package]]
@@ -2541,7 +2560,7 @@ dependencies = [
 
 [[package]]
 name = "term"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "arrange_millis",

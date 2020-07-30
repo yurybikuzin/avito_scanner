@@ -77,8 +77,6 @@ where
 
     let mut fut_queue = FuturesUnordered::new();
     while diap_i < arg.thread_limit_network && diap_i < diaps_len {
-        // let client = reqwest::Client::new();
-        // let client = reqwest::Client::new();
         let client = arg.client_provider.build().await?;
         let diap = arg.diaps_ret.diaps[diap_i].clone();
         push_fut!(fut_queue, client, auth, arg, 1, diap);
@@ -101,7 +99,11 @@ where
                     },
                     Ok(ret) => {
                         for id in ret.ids {
-                            ids.insert(id);
+                            if ids.contains(&id) {
+                                warn!("id '{}' already in set", id);
+                            } else {
+                                ids.insert(id);
+                            }
                         }
 
                         callback = if let Some(mut callback) = callback {

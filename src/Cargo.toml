@@ -24,5 +24,6 @@ members = [
     "client",
     "test_helper",
     "settings",
+    "convert",
 ]
 

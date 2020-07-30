@@ -56,14 +56,14 @@ impl DiapStore {
     }
     pub fn get_diaps(&self, arg: &diaps::Arg, fresh_duration: chrono::Duration) -> Option<&DiapStoreItem> {
         let key = format!("{}", arg);
-        info!("diaps key: {}", key);
+        trace!("diaps key: {}", key);
         match self.0.get(&key) {
             None => {
-                info!("no diaps for key: {}, diaps: {}", key, serde_json::to_string_pretty(&self).unwrap());
+                trace!("no diaps for key: {}, diaps: {}", key, serde_json::to_string_pretty(&self).unwrap());
                 None
             },
             Some(item) => {
-                info!("got diaps by key: {}", key);
+                trace!("got diaps by key: {}", key);
                 if let Some(fresh_limit) = item.timestamp.checked_add_signed(fresh_duration) {
                     if chrono::Utc::now() > fresh_limit {
                         None

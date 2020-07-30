@@ -1,8 +1,6 @@
 
-#[allow(unused_imports)]
-use log::{error, warn, info, debug, trace};
-#[allow(unused_imports)]
-use anyhow::{anyhow, bail, Result, Error, Context};
+// #[allow(unused_imports)]
+// use log::{error, warn, info, debug, trace};
 
 use std::io::{stdout , Write};
 
@@ -48,9 +46,9 @@ impl Arg {
 }
 
 impl Term {
-    pub fn init(arg: Arg) -> Result<Self> {
+    pub fn init(arg: Arg) -> Self {
         let mut stdout = TermStdout::new();
-        let anchors = stdout.output(arg.header.as_deref())?;
+        let anchors = stdout.output(arg.header.as_deref());
         let anchors = if arg.is_merged_header {
             anchors
         } else {
@@ -59,23 +57,22 @@ impl Term {
                 row_last: anchors.row_last,
             }
         };
-        Ok(Self {
+        Self {
             stdout,
             anchors,
-        })
+        }
     }
-    pub fn output(&mut self, s: String) -> Result<()> {
-        self.stdout.restore_cursor(&self.anchors)?;
-        self.anchors = self.stdout.output(Some(s.as_str()))?;
-        Ok(())
+    pub fn output(&mut self, s: String) {
+        self.stdout.restore_cursor(&self.anchors);
+        self.anchors = self.stdout.output(Some(s.as_str()));
     }
 }
 
 // ============================================================================
 
 struct TermAnchors {
-    row_prev: u16,
-    row_last: u16,
+    row_prev: Option<u16>,
+    row_last: Option<u16>,
 }
 
 // ============================================================================
@@ -91,53 +88,65 @@ impl TermStdout {
             stdout: stdout()
         }
     }
-    fn output(&mut self, s: Option<&str>) -> Result<TermAnchors> {
-        let mut row_prev = crossterm::cursor::position()?.1;
-        let (cols, rows) = crossterm::terminal::size()?;
-        if cols > 0 && rows > 0 {
-            let lines = MARGIN + if let Some(s) = &s {
-                let s_len = s.len() as u16;
-                s_len / cols + (if s_len % cols == 0 { 0 } else { 1 })
-            } else {
-                0
-            };
-            // println!("row_prev: {}, rows: {}, lines: {}", row_prev, rows, lines);
-            if row_prev >= rows - 1 - lines {
-                let lines = row_prev - (rows - 1 - lines) ;
-                row_prev -= lines;
-            // println!("row_prev: {}, rows: {}, lines: {}", row_prev, rows, lines);
-                if lines > 0 {
-                    queue!(self.stdout, 
-                        terminal::ScrollUp(lines),
-                    )?;
-                }
-                queue!(self.stdout, 
-                    // terminal::ScrollUp(lines - 1),
-                    cursor::MoveTo(0, row_prev),
-                )?;
+    fn output(&mut self, s: Option<&str>) -> TermAnchors {
+        let mut row_prev_opt = match crossterm::cursor::position() {
+            Err(_) => None,
+            Ok(pos) => Some(pos.1),
+        };
+        if let Some(mut row_prev) = row_prev_opt.take() {
+            match crossterm::terminal::size() {
+                Err(_) => {},
+                Ok((cols, rows)) => {
+                    if cols > 0 && rows > 0 {
+                        let lines = MARGIN + if let Some(s) = &s {
+                            let s_len = s.len() as u16;
+                            s_len / cols + (if s_len % cols == 0 { 0 } else { 1 })
+                        } else {
+                            0
+                        };
+                        if row_prev >= rows - 1 - lines {
+                            let lines = row_prev - (rows - 1 - lines) ;
+                            row_prev -= lines;
+                            if lines > 0 {
+                                if let Err(_) = queue!(self.stdout, 
+                                    terminal::ScrollUp(lines),
+                                ) {};
+                            }
+                            if let Err(_) = queue!(self.stdout, 
+                                cursor::MoveTo(0, row_prev),
+                            ) {};
+                            row_prev_opt.replace(row_prev);
+                        }
+                    }
+                },
             }
-        // self.stdout.flush()?;
-            // todo!();
         }
         if let Some(s) = s {
-            queue!(self.stdout,
+            if let Err(_) = queue!(self.stdout,
                 Print(s),
                 Print("\n".to_owned())
-            )?;
+            ) {};
         }
-        self.stdout.flush()?;
-        let row_last = crossterm::cursor::position()?.1;
-        Ok(TermAnchors {row_prev, row_last})
+        if let Err(_) = self.stdout.flush() {};
+        let row_last = match crossterm::cursor::position() {
+            Err(_) => None,
+            Ok(pos) => Some(pos.1),
+        };
+        TermAnchors {row_prev: row_prev_opt, row_last}
     }
-    fn restore_cursor(&mut self, anchors: &TermAnchors) -> Result<()> {
-        let (col_cur, row_cur) = crossterm::cursor::position()?;
-        if row_cur == anchors.row_last && col_cur == 0 {
-            queue!(self.stdout,
-                cursor::MoveTo(0, anchors.row_prev),
-                terminal::Clear(terminal::ClearType::FromCursorDown)
-            )?;
+    fn restore_cursor(&mut self, anchors: &TermAnchors) {
+        if let Some(row_last) = anchors.row_last {
+            if let Some(row_prev) = anchors.row_prev {
+                if let Ok((col_cur, row_cur)) = crossterm::cursor::position() {
+                    if row_cur == row_last && col_cur == 0 {
+                        if let Err(_) = queue!(self.stdout,
+                            cursor::MoveTo(0, row_prev),
+                            terminal::Clear(terminal::ClearType::FromCursorDown)
+                        ) {};
+                    }
+                }
+            }
         }
-        Ok(())
     }
 }
 
@@ -148,6 +157,8 @@ impl TermStdout {
 #[cfg(test)]
 mod tests {
 
+    #[allow(unused_imports)]
+    use anyhow::{anyhow, bail, Result, Error, Context};
     #[allow(unused_imports)]
     use log::{error, warn, info, debug, trace};
     use super::*;
@@ -169,7 +180,7 @@ mod tests {
         };
         let mut term = Term::init(
             super::Arg::new().header("long_live . . .")
-        )?;
+        );
         info!("some info");
         long_live(&arg, Some(|arg: CallbackArg| -> Result<()> {
             term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
@@ -198,7 +209,7 @@ mod tests {
         };
         let mut term = Term::init(
             super::Arg::new().header("long_live . . .").merge()
-        )?;
+        );
         long_live(&arg, Some(|arg: CallbackArg| -> Result<()> {
             term.output(format!("long_live: time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
                 arrange_millis::get(arg.elapsed_millis), 

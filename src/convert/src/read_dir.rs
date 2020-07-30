@@ -24,8 +24,7 @@ use regex::Regex;
 
 pub async fn run(arg: Arg) -> Result<Ret> {
     lazy_static! {
-        static ref RE_FILE: Regex = Regex::new(r"^[0-9a-f]{7}\.json$").unwrap();
-        static ref RE_DIR: Regex = Regex::new(r"^[0-9a-f]{9}$").unwrap();
+        static ref RE: Regex = Regex::new(r"^[0-9a-f]{2}\.json$").unwrap();
     }
     let mut dirs = Vec::<PathBuf>::new();
     let mut files = Vec::<PathBuf>::new();
@@ -36,17 +35,9 @@ pub async fn run(arg: Arg) -> Result<Ret> {
             let path = entry.path();
             let metadata = fs::metadata(&path).await?;
             if metadata.is_dir() {
-                if RE_DIR.is_match(&path.file_name().unwrap().to_string_lossy()) {
-                    dirs.push(path)
-                } else {
-                    warn!("skipped dir: {:?}", path);
-                }
-            } else if metadata.is_file() {
-                if RE_FILE.is_match(&path.file_name().unwrap().to_string_lossy()) {
-                    files.push(path)
-                } else {
-                    warn!("skipped file: {:?}", path);
-                }
+                dirs.push(path)
+            } else if metadata.is_file() && RE.is_match(&path.file_name().unwrap().to_string_lossy()) {
+                files.push(path)
             }
         } else {
             break;

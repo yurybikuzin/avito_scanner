@@ -6,6 +6,7 @@ pushd "$dir"
 docker-compose down --remove-orphans\
 && \
 BW_HOST_CNF_DIR=../cnf \
+BW_HOST_OUT_DIR=../out \
 docker-compose \
     up -d \
 && \

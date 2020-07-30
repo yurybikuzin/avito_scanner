@@ -313,7 +313,7 @@ mod tests {
         };
         let mut auth = auth::Lazy::new(auth::Arg::new_ready("af0deccbgcgidddjgnvljitntccdduijhdinfgjgfjir".to_owned()));
 
-        let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."))?;
+        let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."));
         let start = Instant::now();
         let ret = fetch_and_save(&mut auth, arg, Some(|arg: CallbackArg| -> Result<()> {
             term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
@@ -324,7 +324,8 @@ mod tests {
                 arg.elapsed_qt,
                 arg.elapsed_qt + arg.remained_qt,
                 arg.remained_qt,
-            ))
+            ));
+            Ok(())
         })).await?;
         println!("{}, Объявления получены: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
 

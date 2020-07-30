@@ -42,9 +42,13 @@ struct Opt {
     #[structopt(short, long)]
     autocatalog_skip: bool,
 
-    /// extract bmw
-    #[structopt(short, long)]
-    extract_bmw: bool,
+    // /// extract bmw
+    // #[structopt(short, long)]
+    // extract_bmw: bool,
+
+    // /// convert
+    // #[structopt(long)]
+    // conver: bool,
 }
 use settings::Settings;
 
@@ -56,7 +60,6 @@ async fn main() -> Result<()> {
         std::env::set_var("RUST_LOG", "warn");
     }
 
-
     let opt = Opt::from_args();
 
     let settings = Settings::new(&opt.config).map_err(|err| anyhow!("{:?}: {}", opt.config, err))?;
@@ -66,6 +69,9 @@ async fn main() -> Result<()> {
     println!("rmq: {:?}, settings: {}", opt.config, settings_rmq.as_string_pretty()?);
 
     let out_dir = PathBuf::from(&settings.out_dir);
+// if opt.convert {
+//
+// } else {
     let pool = rmq::get_pool(settings_rmq)?;
     let queue_uuid = uuid::Uuid::new_v4();
     let queue_name = format!("response-{}", queue_uuid);
@@ -127,18 +133,18 @@ if !opt.scan_skip {
             let diap_store = DiapStore::from_file(&diap_store_file_spec).await;
             let mut diap_store = match diap_store {
                 Ok(diap_store) => {
-                    info!("diap_store exists at: {:?}", diap_store_file_spec);
+                    trace!("diap_store exists at: {:?}", diap_store_file_spec);
                     diap_store
                 }, 
                 Err(_) => {
-                    info!("no diap_store at: {:?}", diap_store_file_spec);
+                    trace!("no diap_store at: {:?}", diap_store_file_spec);
                     DiapStore::new()
                 },
             };
             let diaps_ret = match diap_store.get_diaps(&diaps_arg, diap_fresh_duration) {
                 Some(item) => &item.ret,
                 None => {
-                    let mut term = Term::init(term::Arg::new().header("Определение диапазонов цен . . ."))?;
+                    let mut term = Term::init(term::Arg::new().header("Определение диапазонов цен . . ."));
                     let start = Instant::now();
                     let diaps_ret = diaps::get(
                         &mut auth,
@@ -154,7 +160,8 @@ if !opt.scan_skip {
                                 if arg.price_max.is_none() { "".to_owned() } else { arg.price_max.unwrap().to_string() },
                                 if arg.price_max_delta.is_none() { "".to_owned() } else { arg.price_max_delta.unwrap().to_string() },
                                 if arg.count.is_none() { "".to_owned() } else { arg.count.unwrap().to_string() },
-                            ))
+                            ));
+                            Ok(())
                         })
                     ).await?;
                     let diaps_len = diaps_ret.diaps.len();
@@ -174,7 +181,7 @@ if !opt.scan_skip {
                 items_per_page,
                 client_provider: client_provider.clone(),
             };
-            let mut term = Term::init(term::Arg::new().header("Получение списка идентификаторов . . ."))?;
+            let mut term = Term::init(term::Arg::new().header("Получение списка идентификаторов . . ."));
             let start = Instant::now();
             let ids_ret = ids::get(&mut auth, ids_arg, Some(|arg: ids::CallbackArg| -> Result<()> {
                 term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}, ids_len: {}", 
@@ -186,7 +193,8 @@ if !opt.scan_skip {
                     arg.elapsed_qt + arg.remained_qt,
                     arg.remained_qt,
                     arg.ids_len,
-                ))
+                ));
+                Ok(())
             })).await?;
             let ids_len = ids_ret.len();
             id_store.set_ids(&params, ids_ret);
@@ -198,7 +206,7 @@ if !opt.scan_skip {
         },
     };
 
-    let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."))?;
+    let mut term = Term::init(term::Arg::new().header("Получение объявлений . . ."));
     let arg = cards::Arg {
         ids: &ids, 
         out_dir: &out_dir,
@@ -217,18 +225,25 @@ if !opt.scan_skip {
             arg.elapsed_qt,
             arg.elapsed_qt + arg.remained_qt,
             arg.remained_qt,
-        ))
+        ));
+        Ok(())
     })).await?;
     println!("{}, Объявления получены: {}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), ret.received_qt);
 }
 
-let records = if opt.collect_skip { None } else {
+// let records = 
+if opt.collect_skip { None } else {
+    let cards_dir = {
+        let mut cards_dir = out_dir.clone();
+        cards_dir.push("cards");
+        cards_dir
+    };
     let arg = collect::Arg { 
-        out_dir: &out_dir.as_path(),
+        out_dir: &cards_dir.as_path(),
         thread_limit_file: 3,
     };
 
-    let mut term = Term::init(term::Arg::new().header("Чтение объявлений . . ."))?;
+    let mut term = Term::init(term::Arg::new().header("Чтение объявлений . . ."));
     let start = Instant::now();
     let mut records = collect::Records::new();
     collect::items(arg, &mut records, Some(|arg: collect::CallbackArg| -> Result<()> {
@@ -238,7 +253,8 @@ let records = if opt.collect_skip { None } else {
                     arrange_millis::get(elapsed_millis), 
                     dir_qt,
                     file_qt,
-                ))
+                ));
+                Ok(())
             },
             collect::CallbackArg::ReadFile {elapsed_millis, remained_millis, per100_millis, elapsed_qt, remained_qt} => {
                 term.output(format!("time: {}/{}-{}, per100: {}, qt: {}/{}-{}", 
@@ -249,7 +265,8 @@ let records = if opt.collect_skip { None } else {
                     elapsed_qt,
                     elapsed_qt + remained_qt,
                     remained_qt,
-                ))
+                ));
+                Ok(())
             },
         }
     })).await?;
@@ -265,7 +282,7 @@ let records = if opt.collect_skip { None } else {
             }
         }
 
-        info!("autocatalog_urls: {}", autocatalog_urls.len());
+        trace!("autocatalog_urls: {}", autocatalog_urls.len());
 
         let out_dir = Path::new("/out");
         let arg = autocatalog::Arg {
@@ -277,7 +294,7 @@ let records = if opt.collect_skip { None } else {
                 // client::Provider::new(client::Kind::ViaProxy(pool.clone(), "autocatalog".to_owned())),
         };
 
-        let mut term = Term::init(term::Arg::new().header("Получение автокаталога . . ."))?;
+        let mut term = Term::init(term::Arg::new().header("Получение автокаталога . . ."));
         autocatalog::fetch_and_save(arg, Some(|arg: autocatalog::CallbackArg| -> Result<()> {
             term.output(format!("time: {}/{}-{}, per: {}, qt: {}/{}-{}", 
                 arrange_millis::get(arg.elapsed_millis), 
@@ -287,7 +304,8 @@ let records = if opt.collect_skip { None } else {
                 arg.elapsed_qt,
                 arg.elapsed_qt + arg.remained_qt,
                 arg.remained_qt,
-            ))
+            ));
+            Ok(())
         })).await?;
     }
 
@@ -378,47 +396,49 @@ let records = if opt.collect_skip { None } else {
     Some(records)
 };
 
-if opt.extract_bmw {
-    let records = match records {
-        Some(records) => records,
-        None => {
-            let file_path = {
-                let mut file_path = out_dir.clone();
-                file_path.push("records.csv");
-                file_path
-            };
-            let mut reader = csv::Reader::from_path(file_path)?;
-            let mut records = collect::Records::new();
-            for record in reader.deserialize() {
-                let record: record::card::Record = record?;
-                // let record: record::card::Record = record.deserialize();
-                records.0.push(record);
-            }
-            records
-        },
-    };
-    println!("Отбор BMW из объявлений: {}", records.0.len());
-    let start = std::time::Instant::now();
-    let mut bmw_records = collect::Records::new();
-    for record in records.0.into_iter() {
-        if let Some(brand) = &record.brand {
-            if brand == "BMW" {
-                bmw_records.0.push(record);
-            }
-        }
-    }
-    let file_path = {
-        let mut file_path = out_dir.clone();
-        file_path.push("records_bmw.csv");
-        file_path
-    };
-    let arg = to_csv::Arg {
-        file_path: &file_path,
-        records: &bmw_records,
-    };
-    to_csv::write(arg).await?;
-    println!("{}, BMW отбраны ({}) и записаны в файл {:?}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), bmw_records.0.len(), file_path);
-}
+// if opt.extract_bmw {
+//     let records = match records {
+//         Some(records) => records,
+//         None => {
+//             let file_path = {
+//                 let mut file_path = out_dir.clone();
+//                 file_path.push("records.csv");
+//                 file_path
+//             };
+//             let mut reader = csv::Reader::from_path(file_path)?;
+//             let mut records = collect::Records::new();
+//             for record in reader.deserialize() {
+//                 let record: record::card::Record = record?;
+//                 // let record: record::card::Record = record.deserialize();
+//                 records.0.push(record);
+//             }
+//             records
+//         },
+//     };
+//     println!("Отбор BMW из объявлений: {}", records.0.len());
+//     let start = std::time::Instant::now();
+//     let mut bmw_records = collect::Records::new();
+//     for record in records.0.into_iter() {
+//         if let Some(brand) = &record.brand {
+//             if brand == "BMW" {
+//                 bmw_records.0.push(record);
+//             }
+//         }
+//     }
+//     let file_path = {
+//         let mut file_path = out_dir.clone();
+//         file_path.push("records_bmw.csv");
+//         file_path
+//     };
+//     let arg = to_csv::Arg {
+//         file_path: &file_path,
+//         records: &bmw_records,
+//     };
+//     to_csv::write(arg).await?;
+//     println!("{}, BMW отбраны ({}) и записаны в файл {:?}", arrange_millis::get(Instant::now().duration_since(start).as_millis()), bmw_records.0.len(), file_path);
+// }
+
+// }
 
 // if false {
 //     let mut reader = csv::Reader::from_path("/out/test.csv")?;

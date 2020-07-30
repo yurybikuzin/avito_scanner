@@ -5,8 +5,9 @@ echo "Иницализация контейнера '$BW_PROJ_NAME-proj'. . ."
 chown -R root \
     /usr/local/cargo/git \
     /usr/local/cargo/registry \
-    /src/target \
-    /out
+    /src/target 
+# \
+#     /out
 
 cat <<USAGE 
 Контейнер '$BW_PROJ_NAME-proj' инициализирован
