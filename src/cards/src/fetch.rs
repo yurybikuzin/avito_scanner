@@ -29,7 +29,7 @@ pub async fn run(arg: Arg) -> Result<Ret> {
     let (text, status) = arg.client.get_text_status(url.clone()).await.context("cards::fetch")?;
     match status {
         code @ http::StatusCode::NOT_FOUND => {
-            warn!("{} :: {}: {}", url, code, text);
+            trace!("{} :: {}: {}", url, code, text);
             return Ok(Ret {
                 client: arg.client,
                 id: arg.id, 

@@ -100,7 +100,7 @@ where
                     Ok(ret) => {
                         for id in ret.ids {
                             if ids.contains(&id) {
-                                warn!("id '{}' already in set", id);
+                                trace!("id '{}' already in set", id);
                             } else {
                                 ids.insert(id);
                             }
