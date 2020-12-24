@@ -45,7 +45,7 @@ do
             shift 1
         ;;
 
-        --help)
+        -h | --help)
             usage
         ;;
 
