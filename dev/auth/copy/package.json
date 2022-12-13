@@ -1,7 +1,7 @@
 {
   "license": "SEE LICENSE IN LICENSE.md",
   "dependencies": {
-    "express": "^4.17.1",
+    "express": "^4.17.3",
     "puppeteer-core": "^4.0.0"
   }
 }
